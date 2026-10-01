@@ -16,7 +16,8 @@ Monorepo, DB schema, Docker Compose, natively-run worker, CI workflow, empty UI 
 - [ ] Root scripts work: `pnpm dev`, `pnpm build`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:unit`, `pnpm test:e2e`
 - [ ] Drizzle schema + initial migration for `playlists`, `tracks`, `runs`, `jobs`, `events`, `downloads`, `human_requests`, with foreign keys, indexes, and enums for classification and job status
 - [ ] `pnpm db:migrate` applies cleanly to an empty database; a test proves it
-- [ ] `docker compose up` starts Postgres, Redis, and web with health checks; web is reachable in the browser
+- [ ] `docker compose up` starts Postgres and Redis with health checks; `docker compose --profile web up` additionally builds and starts web, reachable in the browser
+- [ ] `pnpm dev` runs web natively against the Compose Postgres and Redis
 - [ ] Worker starts natively with `pnpm --filter @gatecrusher/worker dev`, validates env, connects to Postgres and Redis, processes a no-op `ping` job, and logs with pino
 - [ ] Env validated with zod at startup in web and worker; `.env.example` complete; bad env exits with a clear message
 - [ ] `.gitignore` covers `.env*` (not `.env.example`), `data/`, build output, Playwright artefacts
@@ -60,11 +61,11 @@ Headed persistent Playwright profile with the burner login, native download adap
 - [ ] `GateAdapter`, `GateStep`, `GateContext`, `StepResult` defined in `core`; step runner and adapter registry in `gates`
 - [ ] Central delay provider with randomised ranges; adapters cannot act without it; a zero-delay fake is used in tests
 - [ ] Native SoundCloud adapter written as resumable steps: open track -> open "More" -> Download -> capture file
-- [ ] Download verification: file exists, size > 1 MB, audio MIME sniffed from content; failures never mark success; partial files cleaned up
+- [ ] Download verification: file exists, size above `MIN_DOWNLOAD_BYTES` (env, default 1 MB), content sniffed as audio or as a zip containing at least one audio entry above the threshold; archives kept as delivered and recorded as `archive`; failures never mark success; partial files cleaned up
 - [ ] Files saved as `data/downloads/<playlist-slug>/<artist> - <title>.<ext>` with sanitised names and collision handling; a `downloads` row with size, MIME, checksum
 - [ ] "Run native tracks" on a playlist processes native tracks sequentially (one at a time, delays between); already-verified tracks are skipped
 - [ ] Each step writes events with status, step name, and screenshot path
-- [ ] Shared blocker detector (captcha / login challenge / unexpected page) exists and is called after every step; in this slice a detection parks the job as `WAITING_FOR_HUMAN` and is shown as a plain status (full Needs-you UX arrives in slice 4)
+- [ ] Shared blocker detector (captcha / login challenge / unexpected page) exists and is called after every step; in this slice a detection parks the job as `WAITING_FOR_HUMAN` and is shown as a plain status with the description and screenshot; clicking "Run native tracks" again retries parked tracks (the Continue / Give up flow and Needs-you cards arrive in slice 4)
 - [ ] Fixture pages for the native flow incl. captcha, removed track, download-disabled; integration tests cover happy path, verification failure, and blocker detection — all offline
 - [ ] Manual smoke steps documented: login, run a real playlist with one native track, confirm the file plays
 
@@ -120,13 +121,13 @@ Browser-agent adapter for unknown gates, `request_human` wired into the same pau
 
 ## Slice 6 — Manual list + evals + deploy
 
-True manual list, notifications, evals page, production setup and deploy notes.
+True manual list, in-app run status, evals page, production setup and deploy notes. No push, browser, or outbound notifications — the user checks the app.
 
 **Acceptance criteria**
 
 - [ ] Manual list page: every `MANUAL` track across runs with reason, detail, gate link, SoundCloud link, when it happened; filter by reason and playlist; CSV export; "Retry" to re-queue and "Mark as done" to dismiss
 - [ ] A test proves no code path produces `MANUAL` without a reason and link, and that only the four allowed reasons exist
-- [ ] Notifications when a run finishes and when a job needs the user: in-browser (Notification API, with permission prompt and graceful denial) plus one optional outbound channel configured by env (to be agreed at slice start); a reminder for requests left open; notifications contain no secrets
+- [ ] Run state is obvious on opening the app: Runs list shows each run as running / finished / finished-waiting-on-you with counts, and the nav Needs-you counter and document-title count are accurate on first load (no notifications of any kind are sent)
 - [ ] Run summary: downloaded / buy / manual / needs-you counts, with links to each list
 - [ ] Evals page: per gate platform — attempts, success rate, human-intervention rate, manual rate broken down by reason, median time per track; for the agent also average steps and cost per track; filter by date range
 - [ ] Evals are computed from the events/jobs tables by tested query functions; charts follow the dark design tokens and have empty states

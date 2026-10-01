@@ -92,7 +92,7 @@ If the human has done more than asked (e.g. completed the next two steps), later
 
 ### 7. Download and result
 
-- Final step uses `ctx.waitForDownload(() => locator.click())`. The ctx saves it to the downloads layout and runs verification (exists, > 1 MB, audio MIME sniffed from bytes).
+- Final step uses `ctx.waitForDownload(() => locator.click())`. The ctx saves it to the downloads layout and runs verification (exists, above `MIN_DOWNLOAD_BYTES`, and sniffed from bytes as audio or as a zip containing an audio entry above the threshold).
 - Verification failure is not success: HTML error page saved as `.mp3` -> `impossible: file_gone` if the platform says so, otherwise `needs_human: unexpected_page`.
 - Return `{ kind: "done", download }`.
 - Use `impossible` only for the four `ManualReason`s, always with `detail` a human can act on.
@@ -120,7 +120,8 @@ Required cases per adapter:
 - [ ] resume on a fresh page (simulated worker restart) -> steps self-skip to the right place
 - [ ] dead link -> `impossible: dead_link`
 - [ ] login challenge and unexpected page -> `needs_human`
-- [ ] bad download (tiny / wrong MIME) -> not `done`
+- [ ] bad download (tiny / wrong MIME / zip with no audio) -> not `done`
+- [ ] zip containing audio -> `done`, recorded as an archive
 - [ ] no test makes a request to a non-localhost host (enforced by the fixture server's route guard)
 
 ### 10. Register

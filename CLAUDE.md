@@ -37,7 +37,7 @@ These are not negotiable. If a task seems to require breaking one, stop and ask.
 - **`packages/core`** — shared types, zod schemas, gate classifier, adapter interfaces, result types.
 - **`packages/gates`** — gate adapters + the AI browser agent.
 - **Redis** — BullMQ queue and pub/sub for live events.
-- **Docker Compose** — Postgres, Redis, web. **The worker runs natively on the host** so its browser window is visible.
+- **Docker Compose** — Postgres, Redis, web. **The worker runs natively on the host** so its browser window is visible. The `web` service sits behind the Compose profile `web` and is for the production setup; day to day, `docker compose up` starts only Postgres and Redis and web runs natively with `pnpm dev`.
 - **Tooling:** ESLint + Prettier, Vitest, Playwright Test, pino.
 
 Dependency direction: `apps/*` -> `packages/gates` -> `packages/core`; `packages/db` -> `packages/core`. `core` imports nothing from the workspace. `gates` never imports `db` — it reports through the `ctx` it is given.
@@ -47,7 +47,7 @@ Dependency direction: `apps/*` -> `packages/gates` -> `packages/core`; `packages
 - **One adapter interface.** Every gate implements `GateAdapter`: `detect(url)` and `run(ctx) -> Result`. `run` is written as an ordered list of **resumable steps** so a job can pause at any step and continue from it.
 - **The AI agent is just another adapter** with the lowest priority in the registry. It gets no special paths through the worker.
 - **Structured events for everything.** Every job writes events (`status`, `step`, `screenshot path`, `error`, `needs_human` details) to Postgres and publishes them so the UI can show live progress.
-- **Verify every download** before marking success: file exists, size > 1 MB, audio MIME (sniffed from content, not the extension).
+- **Verify every download** before marking success: file exists, size above `MIN_DOWNLOAD_BYTES` (default 1 MB), and the content (sniffed from bytes, not the extension) is either audio or a zip archive containing at least one audio entry above the same threshold. Archives are kept as delivered and recorded as `archive` in `downloads`.
 - **State lives in Postgres.** Redis is transport. In-memory state (open pages) is a cache that must be recoverable — see the human-in-the-loop skill.
 
 ## Coding standards

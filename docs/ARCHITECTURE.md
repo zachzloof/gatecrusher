@@ -124,7 +124,7 @@ Details, timeouts and restart behaviour: `.claude/skills/human-in-the-loop/SKILL
 - **runs** — one execution of a playlist; aggregate counts and status.
 - **jobs** — one per track per run: status, adapter id, `step_index`, adapter `state` (JSON), attempts, manual reason + link.
 - **events** — append-only log per job: type, step, screenshot path, error, payload (JSON, zod-validated per type).
-- **downloads** — file path, size, MIME, checksum, verified-at; unique per track.
+- **downloads** — file path, size, MIME, kind (`audio` | `archive`), checksum, verified-at; unique per track.
 - **human_requests** — reason, description, screenshot, page URL, status, attempt, session-alive flag, resolution.
 
 Postgres is the source of truth. Redis carries jobs and change notifications only; the UI can always rebuild its view from Postgres.
@@ -168,6 +168,7 @@ The web container mounts `data/screenshots` read-only to serve images to the UI 
 
 ## Deployment shape
 
-- `docker compose up` -> Postgres, Redis, web.
+- **Development:** `docker compose up` -> Postgres and Redis only. Web runs natively with `pnpm dev` (fast reload, direct access to `data/`).
+- **Production:** `docker compose --profile web up` -> Postgres, Redis, and the built web image, with `data/screenshots` mounted read-only.
 - `pnpm --filter @gatecrusher/worker start` on the host -> worker + visible browser, connecting to the Compose-published Postgres and Redis ports on localhost.
 - Everything is expected to run on one machine the user controls. The web UI is intended for local/LAN use.

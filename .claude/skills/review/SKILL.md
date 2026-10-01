@@ -89,7 +89,8 @@ After building a slice and getting `pnpm lint && pnpm typecheck && pnpm test` gr
 
 ### Downloads
 
-- [ ] Success is only recorded after verification: exists, > 1 MB, audio MIME sniffed from bytes
+- [ ] Success is only recorded after verification: exists, above `MIN_DOWNLOAD_BYTES`, sniffed from bytes as audio or a zip containing audio
+- [ ] Zip handling reads entry metadata only and never extracts to a path taken from the archive
 - [ ] Partial/failed files are cleaned up; filenames are sanitised and collisions handled
 - [ ] Re-running a playlist does not re-download verified tracks
 

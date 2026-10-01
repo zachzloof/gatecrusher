@@ -60,7 +60,7 @@ Invalid tool input returns an error `tool_result` (the model can correct itself)
 
 ### Download capture
 
-The adapter listens for Playwright `download` events for the whole loop. Any download is saved and verified by `ctx` (exists, > 1 MB, audio MIME). The agent's word is never trusted — only the verifier decides success.
+The adapter listens for Playwright `download` events for the whole loop. Any download is saved and verified by `ctx` (the shared verifier: size threshold, audio or zip-with-audio). The agent's word is never trusted — only the verifier decides success.
 
 ## Guardrails (in code, not just the prompt)
 

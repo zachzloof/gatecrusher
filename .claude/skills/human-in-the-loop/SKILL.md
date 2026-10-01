@@ -84,7 +84,7 @@ Worker publishes every event to a Redis channel per run; `GET /api/runs/:id/even
 
 - A human request **never auto-fails and never auto-becomes manual**.
 - After `HUMAN_REQUEST_TAB_TTL` (default 12h) the worker closes the parked tab to free resources, sets `sessionAlive=false`, and emits an update. The job stays `WAITING_FOR_HUMAN`; Continue takes the "page missing" path.
-- Reminder notification after a configurable interval (slice 6).
+- No notifications or reminders are sent. Open requests are surfaced only in the app (nav counter, document title, run page).
 - A run is "finished" when no job is `QUEUED`/`RUNNING`; it is "finished, waiting on you" while any are `WAITING_FOR_HUMAN`.
 
 ## Worker restart

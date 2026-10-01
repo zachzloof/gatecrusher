@@ -26,7 +26,7 @@ Pure logic in `packages/core` and helpers elsewhere:
 - adapter `detect` functions,
 - job state `transition()`,
 - zod schemas (accept/reject samples),
-- download verifier (tiny file, HTML-as-mp3, valid audio header),
+- download verifier (tiny file, HTML-as-mp3, valid audio header, zip with audio, zip without audio, custom threshold),
 - delay provider (ranges, never zero in production config),
 - CSV export, env validation, cost calculation.
 
@@ -41,7 +41,7 @@ Real pieces wired together, still offline:
 - **API route handlers:** call handlers with real DB; assert zod-validated responses and error shapes.
 - **SoundCloud ingest:** recorded JSON responses (sanitised, committed under `__fixtures__`) served by a fake fetch; includes the `client_id`-expired path and the yt-dlp fallback (fake process runner with recorded `-J` output).
 
-Postgres and Redis for integration tests come from Docker Compose (`docker compose up -d postgres redis`), using a separate test database that is migrated in global setup and truncated between test files.
+Postgres and Redis for integration tests come from Docker Compose (`docker compose up -d`, which starts only those two), using a separate test database that is migrated in global setup and truncated between test files.
 
 ### E2E — Playwright Test, `apps/web/e2e`
 
