@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  Fixture: the signed-in track page (see track.html), where opening "More" also makes a
+  captcha challenge appear — the mid-flow anti-bot check the adapter must hand to the
+  human. The iframe points at the fixture server's fake widget, never at a real captcha
+  provider. Modelled 2026-10-01. Hand-written.
+
+  The test plays the human: window.__solveCaptcha() removes the challenge ("captcha
+  cleared"). Nothing in the adapter ever calls it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream Fixture Track by Fixture Artist | Listen online for free on SoundCloud</title>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__userNav">
+        <button type="button" aria-label="Fixture Burner">Fixture Burner</button>
+      </div>
+    </header>
+
+    <main>
+      <h1>Fixture Track</h1>
+      <p>Fixture Artist</p>
+
+      <div class="listenEngagement">
+        <div class="soundActions">
+          <button type="button" class="sc-button-more" aria-label="More" id="more">More</button>
+        </div>
+      </div>
+
+      <div class="moreActions" id="menu" hidden>
+        <button type="button">Add to Next up</button>
+        <button type="button" class="sc-button-download" id="download">Download file</button>
+      </div>
+
+      <div id="challenge"></div>
+    </main>
+
+    <script>
+      window.__clicks = { more: 0, download: 0 };
+      const menu = document.getElementById("menu");
+      const challenge = document.getElementById("challenge");
+      let challenged = false;
+
+      document.getElementById("more").addEventListener("click", () => {
+        window.__clicks.more += 1;
+        menu.hidden = !menu.hidden;
+        if (!challenged) {
+          challenged = true;
+          const frame = document.createElement("iframe");
+          frame.src = "/fake/recaptcha/anchor";
+          frame.title = "reCAPTCHA";
+          challenge.append(frame);
+        }
+      });
+      document.getElementById("download").addEventListener("click", () => {
+        window.__clicks.download += 1;
+        location.href = "/files/audio";
+      });
+
+      window.__solveCaptcha = () => challenge.replaceChildren();
+    </script>
+  </body>
+</html>

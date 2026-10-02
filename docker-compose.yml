@@ -1,0 +1,85 @@
+# Day to day:   docker compose up -d                  -> Postgres + Redis only
+#               pnpm dev                              -> web, natively (hot reload)
+#               pnpm --filter @gatecrusher/worker dev -> worker, natively (visible browser)
+#
+# Production:   docker compose --profile web up -d --build   -> also builds and runs web
+#
+# The worker is never containerised: it drives a headed browser the user must be able
+# to see and act in.
+#
+# Every port is published on 127.0.0.1 only. Values come from the root .env.
+
+name: gatecrusher
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gatecrusher}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gatecrusher}
+      POSTGRES_DB: ${POSTGRES_DB:-gatecrusher}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: runner
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Inside the Compose network the services are reached by name on their own ports.
+      DATABASE_URL: postgres://${POSTGRES_USER:-gatecrusher}:${POSTGRES_PASSWORD:-gatecrusher}@postgres:5432/${POSTGRES_DB:-gatecrusher}
+      REDIS_URL: redis://redis:6379
+      DATA_DIR: /data
+    volumes:
+      # The worker (on the host) writes screenshots here; web only ever reads them.
+      # Downloads and the browser profile are deliberately not mounted.
+      - ./data/screenshots:/data/screenshots:ro
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - "CMD"
+        - "node"
+        - "-e"
+        - "fetch('http://127.0.0.1:3000/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  postgres_data:
+  redis_data:

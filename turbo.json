@@ -1,0 +1,32 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "agentGuidance": false,
+  "globalDependencies": ["tsconfig.base.json", "eslint.config.mjs"],
+  "globalEnv": ["NODE_ENV", "LOG_LEVEL", "DATABASE_URL", "REDIS_URL", "NEXT_OUTPUT", "CI"],
+  "globalPassThroughEnv": [
+    "PORT",
+    "DATA_DIR",
+    "MIN_DOWNLOAD_BYTES",
+    "ANTHROPIC_API_KEY",
+    "PLAYWRIGHT_BROWSERS_PATH"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "lint": {},
+    "typecheck": {},
+    "test": {
+      "cache": false
+    },
+    "test:unit": {},
+    "test:e2e": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "id": 9001,
+  "kind": "playlist",
+  "title": "Fixture Crate",
+  "permalink_url": "https://soundcloud.com/fixture-curator/sets/fixture-crate",
+  "artwork_url": null,
+  "sharing": "public",
+  "secret_token": null,
+  "track_count": 7,
+  "is_album": false,
+  "user": {
+    "id": 5000,
+    "kind": "user",
+    "username": "fixture-curator",
+    "permalink_url": "https://soundcloud.com/fixture-curator",
+    "avatar_url": "https://i1.sndcdn.com/avatars-fixture-fixture-curator-large.jpg"
+  },
+  "tracks": [
+    {
+      "id": 101,
+      "kind": "track",
+      "title": "Native Download (Original Mix)",
+      "permalink_url": "https://soundcloud.com/fixture-artist/native-download",
+      "artwork_url": "https://i1.sndcdn.com/artworks-fixture-101-large.jpg",
+      "duration": 301000,
+      "purchase_url": null,
+      "purchase_title": null,
+      "downloadable": true,
+      "has_downloads_left": true,
+      "streamable": true,
+      "sharing": "public",
+      "policy": "ALLOW",
+      "user": {
+        "id": 5000,
+        "kind": "user",
+        "username": "fixture-artist",
+        "permalink_url": "https://soundcloud.com/fixture-artist",
+        "avatar_url": "https://i1.sndcdn.com/avatars-fixture-fixture-artist-large.jpg"
+      },
+      "publisher_metadata": {
+        "id": 101,
+        "artist": "Fixture Artist"
+      }
+    },
+    {
+      "id": 102,
+      "kind": "track",
+      "title": "Gated Bootleg",
+      "permalink_url": "https://soundcloud.com/fixture-artist/gated-bootleg",
+      "artwork_url": "https://i1.sndcdn.com/artworks-fixture-102-large.jpg",
+      "duration": 302000,
+      "purchase_url": "https://hypeddit.com/track/fixture1",
+      "purchase_title": "Free Download",
+      "downloadable": false,
+      "has_downloads_left": false,
+      "streamable": true,
+      "sharing": "public",
+      "policy": "ALLOW",
+      "user": {
+        "id": 5000,
+        "kind": "user",
+        "username": "fixture-artist",
+        "permalink_url": "https://soundcloud.com/fixture-artist",
+        "avatar_url": "https://i1.sndcdn.com/avatars-fixture-fixture-artist-large.jpg"
+      },
+      "publisher_metadata": {
+        "id": 102,
+        "artist": "Fixture Artist"
+      }
+    },
+    {
+      "id": 103,
+      "kind": "track",
+      "monetization_model": "NOT_APPLICABLE",
+      "policy": "ALLOW"
+    },
+    {
+      "id": 104,
+      "kind": "track",
+      "monetization_model": "NOT_APPLICABLE",
+      "policy": "ALLOW"
+    },
+    {
+      "id": 105,
+      "kind": "track",
+      "monetization_model": "NOT_APPLICABLE",
+      "policy": "ALLOW"
+    },
+    {
+      "id": 106,
+      "kind": "track",
+      "monetization_model": "NOT_APPLICABLE",
+      "policy": "ALLOW"
+    },
+    {
+      "id": 107,
+      "kind": "track",
+      "monetization_model": "NOT_APPLICABLE",
+      "policy": "ALLOW"
+    }
+  ]
+}

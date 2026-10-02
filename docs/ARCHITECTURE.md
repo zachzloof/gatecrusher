@@ -119,7 +119,7 @@ Details, timeouts and restart behaviour: `.claude/skills/human-in-the-loop/SKILL
 
 ## Data model (outline)
 
-- **playlists** — SoundCloud URL, title, owner, last ingested.
+- **playlists** — canonical SoundCloud URL (the re-ingest key), title, owner, ingest source (`api_v2` | `yt_dlp`), last ingested.
 - **tracks** — SoundCloud id, title, artist, permalink, `purchase_url`, `purchase_title`, `downloadable`, classification (`native` | `gate` | `buy` | `none`), detected gate platform.
 - **runs** — one execution of a playlist; aggregate counts and status.
 - **jobs** — one per track per run: status, adapter id, `step_index`, adapter `state` (JSON), attempts, manual reason + link.
@@ -165,6 +165,8 @@ data/
 ```
 
 The web container mounts `data/screenshots` read-only to serve images to the UI through a route that only resolves paths recorded in the database.
+
+A download is written under a temporary name (`.partial-<uuid>`) and only renamed into place once it has passed verification; a failed one is deleted. A second file wanting the same name becomes `<artist> - <title> (2).<ext>`.
 
 ## Deployment shape
 

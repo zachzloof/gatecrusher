@@ -1,0 +1,59 @@
+<!doctype html>
+<!--
+  Fixture: a SoundCloud track page as a signed-out visitor sees it: the header offers
+  "Sign in" and "Create account" instead of the user nav. This is the "burner is not
+  logged in" condition, which is a needs_human, never a failure. Modelled 2026-10-01.
+  Hand-written.
+
+  The test plays the human: window.__signIn() swaps the header to the signed-in one.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream Fixture Track by Fixture Artist | Listen online for free on SoundCloud</title>
+  </head>
+  <body>
+    <header class="header" id="header">
+      <div class="header__loginMenu">
+        <button type="button" class="loginButton">Sign in</button>
+        <button type="button" class="createAccountButton">Create account</button>
+      </div>
+    </header>
+
+    <main>
+      <h1>Fixture Track</h1>
+      <p>Fixture Artist</p>
+
+      <div class="listenEngagement">
+        <div class="soundActions">
+          <button type="button" class="sc-button-more" aria-label="More" id="more">More</button>
+        </div>
+      </div>
+
+      <div class="moreActions" id="menu" hidden>
+        <button type="button">Add to Next up</button>
+        <button type="button" class="sc-button-download" id="download">Download file</button>
+      </div>
+    </main>
+
+    <script>
+      window.__clicks = { more: 0, download: 0 };
+      const menu = document.getElementById("menu");
+      document.getElementById("more").addEventListener("click", () => {
+        window.__clicks.more += 1;
+        menu.hidden = !menu.hidden;
+      });
+      document.getElementById("download").addEventListener("click", () => {
+        window.__clicks.download += 1;
+        location.href = "/files/audio";
+      });
+
+      window.__signIn = () => {
+        const nav = document.createElement("div");
+        nav.className = "header__userNav";
+        nav.textContent = "Fixture Burner";
+        document.getElementById("header").replaceChildren(nav);
+      };
+    </script>
+  </body>
+</html>

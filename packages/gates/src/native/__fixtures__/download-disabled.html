@@ -1,0 +1,45 @@
+<!doctype html>
+<!--
+  Fixture: a signed-in track page whose uploader has turned downloads off (or whose
+  download limit is used up) since the playlist was ingested: the "More" menu opens but
+  has no "Download file" entry. Modelled 2026-10-01. Hand-written.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream Fixture Track by Fixture Artist | Listen online for free on SoundCloud</title>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__userNav">
+        <button type="button" aria-label="Fixture Burner">Fixture Burner</button>
+      </div>
+    </header>
+
+    <main>
+      <h1>Fixture Track</h1>
+      <p>Fixture Artist</p>
+
+      <div class="listenEngagement">
+        <div class="soundActions">
+          <button type="button" class="sc-button-more" aria-label="More" id="more">More</button>
+        </div>
+      </div>
+
+      <div class="moreActions" id="menu" hidden>
+        <button type="button">Add to Next up</button>
+        <button type="button">Add to playlist</button>
+        <button type="button">Report</button>
+      </div>
+    </main>
+
+    <script>
+      window.__clicks = { more: 0 };
+      const menu = document.getElementById("menu");
+      document.getElementById("more").addEventListener("click", () => {
+        window.__clicks.more += 1;
+        menu.hidden = !menu.hidden;
+      });
+    </script>
+  </body>
+</html>

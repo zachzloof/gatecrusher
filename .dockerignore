@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/playwright-report
+**/test-results
+.git
+.github
+.claude
+data
+docs
+.env
+.env.*
+!.env.example

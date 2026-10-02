@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  Fixture: a sign-in form shown in place of the track page — what a session that expired
+  mid-run is redirected to. Reproduces only what the shared blocker detector reads: a
+  visible password field. The form posts nowhere and holds no real values.
+  Modelled 2026-10-01. Hand-written.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sign in or create an account</title>
+  </head>
+  <body>
+    <main>
+      <h1>Sign in to continue</h1>
+      <form onsubmit="return false;">
+        <label>Email address <input type="email" name="email" autocomplete="off" /></label>
+        <label>Password <input type="password" name="password" autocomplete="off" /></label>
+        <button type="submit">Continue</button>
+      </form>
+    </main>
+  </body>
+</html>

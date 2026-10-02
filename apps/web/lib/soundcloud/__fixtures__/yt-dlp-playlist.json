@@ -1,0 +1,95 @@
+{
+  "_type": "playlist",
+  "id": "9001",
+  "title": "Fixture Crate",
+  "uploader": "fixture-curator",
+  "webpage_url": "https://soundcloud.com/fixture-curator/sets/fixture-crate",
+  "extractor": "soundcloud:set",
+  "extractor_key": "SoundcloudSet",
+  "entries": [
+    {
+      "_type": "url",
+      "ie_key": "Soundcloud",
+      "id": "101",
+      "title": "Native Download (Original Mix)",
+      "url": "https://soundcloud.com/fixture-artist/native-download",
+      "webpage_url": "https://soundcloud.com/fixture-artist/native-download",
+      "uploader": "Fixture Artist",
+      "duration": 301.5,
+      "thumbnails": [
+        {
+          "id": "mini",
+          "url": "https://i1.sndcdn.com/artworks-fixture-101-mini.jpg",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "t500x500",
+          "url": "https://i1.sndcdn.com/artworks-fixture-101-t500x500.jpg",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    {
+      "_type": "url",
+      "ie_key": "Soundcloud",
+      "id": "102",
+      "title": "Gated Bootleg",
+      "url": "https://soundcloud.com/fixture-artist/gated-bootleg",
+      "webpage_url": "https://soundcloud.com/fixture-artist/gated-bootleg",
+      "uploader": "Fixture Artist",
+      "duration": 302.5,
+      "thumbnails": [
+        {
+          "id": "mini",
+          "url": "https://i1.sndcdn.com/artworks-fixture-102-mini.jpg",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "t500x500",
+          "url": "https://i1.sndcdn.com/artworks-fixture-102-t500x500.jpg",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    },
+    null,
+    {
+      "_type": "url",
+      "ie_key": "Soundcloud",
+      "id": "103",
+      "title": null,
+      "url": "https://soundcloud.com/fixture-artist/label-release",
+      "webpage_url": null,
+      "uploader": null,
+      "duration": null,
+      "thumbnails": null
+    },
+    {
+      "_type": "url",
+      "ie_key": "Soundcloud",
+      "id": "102",
+      "title": "Gated Bootleg",
+      "url": "https://soundcloud.com/fixture-artist/gated-bootleg",
+      "webpage_url": "https://soundcloud.com/fixture-artist/gated-bootleg",
+      "uploader": "Fixture Artist",
+      "duration": 302.5,
+      "thumbnails": [
+        {
+          "id": "mini",
+          "url": "https://i1.sndcdn.com/artworks-fixture-102-mini.jpg",
+          "width": 16,
+          "height": 16
+        },
+        {
+          "id": "t500x500",
+          "url": "https://i1.sndcdn.com/artworks-fixture-102-t500x500.jpg",
+          "width": 500,
+          "height": 500
+        }
+      ]
+    }
+  ]
+}

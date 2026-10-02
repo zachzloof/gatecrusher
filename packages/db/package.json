@@ -1,0 +1,32 @@
+{
+  "name": "@gatecrusher/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./migrate": "./src/migrate.ts",
+    "./seed": "./src/seed.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run --passWithNoTests --exclude \"**/*.int.test.ts\"",
+    "generate": "drizzle-kit generate",
+    "migrate": "node --env-file-if-exists=../../.env src/cli/migrate.ts",
+    "seed": "node --env-file-if-exists=../../.env src/cli/seed.ts"
+  },
+  "dependencies": {
+    "@gatecrusher/core": "workspace:*",
+    "drizzle-orm": "^0.45.3",
+    "pino": "^10.3.1",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.0",
+    "drizzle-kit": "^0.31.11",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+
+# Environment — never commit real values
+.env
+.env.*
+!.env.example
+
+# Runtime data: browser profile (burner login), downloads, screenshots
+data/
+
+# Build output and caches
+.next/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# Playwright artefacts
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

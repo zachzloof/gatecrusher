@@ -1,0 +1,40 @@
+# Optional: run web inside Docker with hot reload instead of natively.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile web up --build
+#
+# The repo is bind-mounted into the container and `next dev` reloads on change.
+# node_modules and .next live in named volumes so the host's (Windows/macOS) installs
+# are never mixed with the container's Linux ones. After changing dependencies,
+# rebuild with `--build` and remove the *_modules volumes.
+#
+# `pnpm dev` on the host is faster and is the recommended day-to-day setup.
+
+services:
+  web:
+    build:
+      target: dev
+    restart: "no"
+    environment:
+      NODE_ENV: development
+      # File-change events do not cross the bind mount on Windows/macOS; poll instead.
+      WATCHPACK_POLLING: "true"
+    volumes:
+      - .:/app
+      - root_modules:/app/node_modules
+      - web_modules:/app/apps/web/node_modules
+      - worker_modules:/app/apps/worker/node_modules
+      - core_modules:/app/packages/core/node_modules
+      - db_modules:/app/packages/db/node_modules
+      - gates_modules:/app/packages/gates/node_modules
+      - web_next:/app/apps/web/.next
+    healthcheck:
+      start_period: 60s
+
+volumes:
+  root_modules:
+  web_modules:
+  worker_modules:
+  core_modules:
+  db_modules:
+  gates_modules:
+  web_next:

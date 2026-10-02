@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens (see .claude/skills/frontend-design). Components use these through the
+ * Tailwind theme below and never use raw colour values.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #0b0c0e; /* page */
+  --surface-1: #131518; /* panels, table */
+  --surface-2: #1b1e22; /* row hover, inputs */
+  --border: #262a30; /* hairlines, 1px */
+  --text: #e7e9ec; /* primary */
+  --text-muted: #8b929b; /* secondary, metadata */
+  --text-faint: #5b626b; /* disabled, placeholders */
+  --accent: #ff7a1a; /* "Needs you" and the single primary action only */
+  --ok: #3ecf8e; /* downloaded / verified */
+  --info: #5aa9ff; /* running / in progress, focus ring */
+  --warn: #f2c94c; /* buy list, retryable */
+  --danger: #f0524f; /* failed, destructive */
+  --manual: #a78bfa; /* manual list */
+
+  /*
+   * shadcn/ui variable names, pointed at the tokens so generated components pick up
+   * this theme instead of the default one. shadcn's own `--accent` (a hover surface)
+   * is deliberately not mapped: here `--accent` is the orange above, so shadcn
+   * components that use `bg-accent` for hover must be changed to `bg-surface-2`.
+   */
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--surface-1);
+  --card-foreground: var(--text);
+  --popover: var(--surface-1);
+  --popover-foreground: var(--text);
+  --primary: var(--accent);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface-2);
+  --secondary-foreground: var(--text);
+  --muted: var(--surface-2);
+  --muted-foreground: var(--text-muted);
+  --destructive: var(--danger);
+  --input: var(--border);
+  --ring: var(--info);
+  --radius: 6px;
+}
+
+@theme inline {
+  /* Drop Tailwind's default palette: only the tokens exist. */
+  --color-*: initial;
+
+  --color-bg: var(--bg);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-ok: var(--ok);
+  --color-info: var(--info);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-manual: var(--manual);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  /* Type scale: 12 / 13 / 14 / 16 / 20 / 28. */
+  --text-*: initial;
+  --text-label: 0.6875rem;
+  --text-label--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-13: 0.8125rem;
+  --text-13--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-3xl: 1.75rem;
+  --text-3xl--line-height: 2.25rem;
+
+  /* 6px controls, 8px panels. Nothing larger. */
+  --radius-*: initial;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+
+  --tracking-label: 0.06em;
+
+  --container-content: 1400px;
+
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  html {
+    background-color: var(--bg);
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--info);
+    outline-offset: 2px;
+  }
+
+  ::placeholder {
+    color: var(--text-faint);
+  }
+
+  ::selection {
+    background-color: var(--surface-2);
+    color: var(--text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

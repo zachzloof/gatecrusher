@@ -1,0 +1,65 @@
+<!doctype html>
+<!--
+  Fixture: a SoundCloud track page as a signed-in session sees it, reduced to the
+  structure the native adapter's locators rely on: the header's user nav, the "More"
+  button in the action row under the waveform, the menu it opens, and "Download file".
+  Modelled on soundcloud.com on 2026-10-01. Hand-written: no third-party scripts, no
+  real ids, no personal data.
+
+  "Download file" navigates to /files/<key>, where <key> is the ?file= query parameter
+  (default "audio"), so one page covers every kind of delivered file.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Stream Fixture Track by Fixture Artist | Listen online for free on SoundCloud</title>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__userNav">
+        <button type="button" aria-label="Fixture Burner">Fixture Burner</button>
+      </div>
+    </header>
+
+    <main>
+      <h1>Fixture Track</h1>
+      <p>Fixture Artist</p>
+
+      <div class="listenEngagement">
+        <div class="soundActions">
+          <button type="button" aria-label="Like">Like</button>
+          <button type="button" aria-label="Repost">Repost</button>
+          <button type="button" class="sc-button-more" aria-label="More" id="more">More</button>
+        </div>
+      </div>
+
+      <!-- A purchase link sits on real track pages too. The adapter must never click it. -->
+      <a class="soundActions__purchaseLink" href="/fixture-artist/unexpected" id="purchase">
+        Free Download
+      </a>
+
+      <div class="moreActions" id="menu" hidden>
+        <button type="button">Add to Next up</button>
+        <button type="button">Add to playlist</button>
+        <button type="button" class="sc-button-download" id="download">Download file</button>
+      </div>
+    </main>
+
+    <script>
+      window.__clicks = { more: 0, download: 0, purchase: 0 };
+      const menu = document.getElementById("menu");
+      document.getElementById("more").addEventListener("click", () => {
+        window.__clicks.more += 1;
+        menu.hidden = !menu.hidden;
+      });
+      document.getElementById("download").addEventListener("click", () => {
+        window.__clicks.download += 1;
+        const file = new URLSearchParams(location.search).get("file") ?? "audio";
+        location.href = "/files/" + file;
+      });
+      document.getElementById("purchase").addEventListener("click", () => {
+        window.__clicks.purchase += 1;
+      });
+    </script>
+  </body>
+</html>
