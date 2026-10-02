@@ -92,7 +92,7 @@ profile can only be open in one browser at a time):
 
 ```sh
 pnpm --filter @gatecrusher/worker exec playwright install chromium
-pnpm --filter @gatecrusher/worker login
+pnpm --filter @gatecrusher/worker run login
 ```
 
 A Chromium window opens on SoundCloud's sign-in page. Sign in by hand; the script only
@@ -143,22 +143,22 @@ values.
 
 ## Commands
 
-| Command                                   | What it does                                                    |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `pnpm dev`                                | Web with hot reload, on `127.0.0.1:3000`                        |
-| `pnpm --filter @gatecrusher/worker dev`   | Worker, restarting on file changes                              |
-| `pnpm --filter @gatecrusher/worker start` | Worker, without the file watcher                                |
-| `pnpm --filter @gatecrusher/worker login` | One-time interactive login of the burner SoundCloud account     |
-| `pnpm build`                              | Production build                                                |
-| `pnpm lint`                               | ESLint across the workspace                                     |
-| `pnpm typecheck`                          | `tsc --noEmit` across the workspace                             |
-| `pnpm test`                               | Unit + integration tests (needs `docker compose up -d`)         |
-| `pnpm test:unit`                          | Unit tests only, no services needed                             |
-| `pnpm test:e2e`                           | Playwright UI tests (headless; no services needed)              |
-| `pnpm format`                             | Prettier                                                        |
-| `pnpm db:generate`                        | Generate a migration after changing `packages/db/src/schema.ts` |
-| `pnpm db:migrate`                         | Apply pending migrations                                        |
-| `pnpm db:seed`                            | Insert / refresh the fake seed playlist                         |
+| Command                                       | What it does                                                    |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| `pnpm dev`                                    | Web with hot reload, on `127.0.0.1:3000`                        |
+| `pnpm --filter @gatecrusher/worker dev`       | Worker, restarting on file changes                              |
+| `pnpm --filter @gatecrusher/worker start`     | Worker, without the file watcher                                |
+| `pnpm --filter @gatecrusher/worker run login` | One-time interactive login of the burner SoundCloud account     |
+| `pnpm build`                                  | Production build                                                |
+| `pnpm lint`                                   | ESLint across the workspace                                     |
+| `pnpm typecheck`                              | `tsc --noEmit` across the workspace                             |
+| `pnpm test`                                   | Unit + integration tests (needs `docker compose up -d`)         |
+| `pnpm test:unit`                              | Unit tests only, no services needed                             |
+| `pnpm test:e2e`                               | Playwright UI tests (headless; no services needed)              |
+| `pnpm format`                                 | Prettier                                                        |
+| `pnpm db:generate`                            | Generate a migration after changing `packages/db/src/schema.ts` |
+| `pnpm db:migrate`                             | Apply pending migrations                                        |
+| `pnpm db:seed`                                | Insert / refresh the fake seed playlist                         |
 
 First time running the tests: `pnpm --filter @gatecrusher/web exec playwright install chromium`
 (the adapter and worker integration tests and the UI e2e all use it, headless).

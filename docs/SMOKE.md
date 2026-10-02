@@ -23,7 +23,7 @@ pnpm db:migrate
 The worker must **not** be running: a browser profile can only be open in one browser.
 
 ```sh
-pnpm --filter @gatecrusher/worker login
+pnpm --filter @gatecrusher/worker run login
 ```
 
 - A Chromium window opens on SoundCloud's sign-in page.

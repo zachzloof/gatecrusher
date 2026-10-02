@@ -1,5 +1,5 @@
 // One-time interactive login for the burner SoundCloud account:
-//   pnpm --filter @gatecrusher/worker login
+//   pnpm --filter @gatecrusher/worker run login
 //
 // Opens the worker's own browser profile, headed, on SoundCloud's sign-in page and waits
 // for you to log in by hand. Stop the worker first: a profile can only be open in one

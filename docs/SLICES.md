@@ -56,7 +56,7 @@ Headed persistent Playwright profile with the burner login, native download adap
 
 **Acceptance criteria**
 
-- [ ] `pnpm --filter @gatecrusher/worker login` opens headed Chromium on the persistent profile at the SoundCloud sign-in page, waits for the user to log in by hand, confirms the session, and exits. No credentials are read, stored, or logged by app code
+- [ ] `pnpm --filter @gatecrusher/worker run login` opens headed Chromium on the persistent profile at the SoundCloud sign-in page, waits for the user to log in by hand, confirms the session, and exits. No credentials are read, stored, or logged by app code
 - [ ] Worker launches the same profile headed; refuses to start in headless mode; reports "not logged in" as a `needs_human` condition rather than failing
 - [ ] `GateAdapter`, `GateStep`, `GateContext`, `StepResult` defined in `core`; step runner and adapter registry in `gates`
 - [ ] Central delay provider with randomised ranges; adapters cannot act without it; a zero-delay fake is used in tests
