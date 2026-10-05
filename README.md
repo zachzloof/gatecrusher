@@ -24,6 +24,9 @@ The worker is never containerised. In today's default mode it runs yt-dlp, no br
 
 ## 5-minute local setup
 
+The longer, step-by-step version with troubleshooting is
+[docs/INITIAL-SETUP.md](docs/INITIAL-SETUP.md).
+
 Prerequisites: **Node 24+**, **pnpm 12** (`npm install --global pnpm@12`), **Docker
 Desktop** running. Optional: [yt-dlp](https://github.com/yt-dlp/yt-dlp) on your `PATH`
 (or `YT_DLP_PATH` in `.env`) — see [Adding a playlist](#adding-a-playlist).
