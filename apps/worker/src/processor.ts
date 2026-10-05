@@ -16,11 +16,19 @@ export interface IncomingJob {
   data: unknown;
 }
 
+export interface TrackOutcome {
+  result: TrackJobResult;
+  /** Set when the site pushed back: the worker should stop taking jobs for this long. */
+  backOffMs?: number;
+}
+
 export interface ProcessorDeps {
   log: Logger;
   now?: () => Date;
-  /** Runs one browser job to its next resting point. */
-  processTrack(jobId: string): Promise<TrackJobResult>;
+  /** Runs one track job to its next resting point. */
+  processTrack(jobId: string): Promise<TrackOutcome>;
+  /** Stops taking jobs for a while. */
+  backOff(ms: number): void;
   delay: DelayProvider;
 }
 
@@ -50,7 +58,11 @@ export async function processJob(
     case TRACK_JOB_NAME: {
       const payload = trackJobPayloadSchema.safeParse(job.data);
       if (!payload.success) throw new Error("Invalid track job payload");
-      const result = await deps.processTrack(payload.data.jobId);
+      const { result, backOffMs } = await deps.processTrack(payload.data.jobId);
+      if (backOffMs !== undefined) {
+        log.warn({ backOffMs }, "The site pushed back; pausing the queue");
+        deps.backOff(backOffMs);
+      }
       // Hard rule: behave like a slow human. The pause sits inside the queue job, so
       // the next track cannot start before it is over.
       if (result.outcome !== "skipped") await deps.delay.wait("between-jobs");

@@ -10,12 +10,19 @@ import {
 import { Worker } from "bullmq";
 import { Redis } from "ioredis";
 import type { Logger } from "pino";
-import { createBrowserSession, launchHeadedBrowser, type BrowserLauncher } from "./browser.ts";
+import {
+  createBrowserSession,
+  launchHeadedBrowser,
+  type BrowserLauncher,
+  type BrowserSession,
+} from "./browser.ts";
 import { startHeartbeat } from "./heartbeat.ts";
 import { createParkedPages } from "./parked-pages.ts";
 import { browserProfileDir, resolveDataDir } from "./paths.ts";
-import { processJob } from "./processor.ts";
+import { execFileRunner, type ProcessRunner } from "./process-runner.ts";
+import { processJob, type TrackOutcome } from "./processor.ts";
 import { processTrackJob, type TrackJobDeps } from "./track-job.ts";
+import { processYtDlpJob } from "./ytdlp-job.ts";
 
 export interface StartWorkerOptions {
   env: WorkerEnv;
@@ -26,10 +33,12 @@ export interface StartWorkerOptions {
   heartbeatKey?: string;
   /**
    * Test seams. The real worker always uses the headed launcher, the randomised delay
-   * provider and the built-in registry; tests swap in a headless browser on a throwaway
-   * profile, zero delays and an adapter pointed at local fixtures.
+   * provider, the built-in registry and real yt-dlp; tests swap in a headless browser
+   * on a throwaway profile, zero delays, an adapter pointed at local fixtures, and a
+   * fake yt-dlp that writes a file.
    */
   launchBrowser?: BrowserLauncher;
+  runner?: ProcessRunner;
   delay?: DelayProvider;
   registry?: AdapterRegistry<BrowserGateAdapter>;
   landmarkTimeoutMs?: number;
@@ -100,32 +109,53 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
   redis.on("error", (error) => log.warn({ err: error }, "Redis connection error"));
   log.info("Connected to Redis");
 
-  // The browser opens with the first browser job, not here: a worker with nothing to
-  // do does not put a window on the screen.
   const dataDir = resolveDataDir(env.DATA_DIR);
-  const browser = createBrowserSession({
-    profileDir: browserProfileDir(dataDir),
-    launch: options.launchBrowser ?? launchHeadedBrowser,
-    log,
-  });
   const delay = options.delay ?? createDelayProvider();
-  const trackDeps: TrackJobDeps = {
-    db: db.db,
-    log,
-    browser,
-    parked: createParkedPages(),
-    registry: options.registry ?? defaultRegistry,
-    delay,
-    dataDir,
-    minDownloadBytes: env.MIN_DOWNLOAD_BYTES,
-    ...(options.landmarkTimeoutMs === undefined
-      ? {}
-      : { landmarkTimeoutMs: options.landmarkTimeoutMs }),
-    ...(options.downloadTimeoutMs === undefined
-      ? {}
-      : { downloadTimeoutMs: options.downloadTimeoutMs }),
-  };
 
+  // Native downloads go through yt-dlp unless the paused browser path is chosen on
+  // purpose (NATIVE_DOWNLOAD_MODE=browser, see docs/PIVOT.md). In yt-dlp mode no browser
+  // session exists, so none can open by accident.
+  let browser: BrowserSession | undefined;
+  let processTrack: (jobId: string) => Promise<TrackOutcome>;
+  if (env.NATIVE_DOWNLOAD_MODE === "browser") {
+    // The browser opens with the first browser job, not here: a worker with nothing to
+    // do does not put a window on the screen.
+    browser = createBrowserSession({
+      profileDir: browserProfileDir(dataDir),
+      launch: options.launchBrowser ?? launchHeadedBrowser,
+      log,
+    });
+    const trackDeps: TrackJobDeps = {
+      db: db.db,
+      log,
+      browser,
+      parked: createParkedPages(),
+      registry: options.registry ?? defaultRegistry,
+      delay,
+      dataDir,
+      minDownloadBytes: env.MIN_DOWNLOAD_BYTES,
+      ...(options.landmarkTimeoutMs === undefined
+        ? {}
+        : { landmarkTimeoutMs: options.landmarkTimeoutMs }),
+      ...(options.downloadTimeoutMs === undefined
+        ? {}
+        : { downloadTimeoutMs: options.downloadTimeoutMs }),
+    };
+    processTrack = async (jobId) => ({ result: await processTrackJob(jobId, trackDeps) });
+    log.warn("NATIVE_DOWNLOAD_MODE=browser: the paused browser path is on (see docs/PIVOT.md)");
+  } else {
+    const ytDlpDeps = {
+      db: db.db,
+      log,
+      runner: options.runner ?? execFileRunner,
+      command: env.YT_DLP_PATH,
+      dataDir,
+      minDownloadBytes: env.MIN_DOWNLOAD_BYTES,
+    };
+    processTrack = (jobId) => processYtDlpJob(jobId, ytDlpDeps);
+  }
+
+  let resumeTimer: NodeJS.Timeout | undefined;
   const queueName = options.queueName ?? QUEUE_NAME;
   const worker = new Worker(
     queueName,
@@ -133,11 +163,21 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
       processJob(job, {
         log,
         delay,
-        processTrack: (jobId) => processTrackJob(jobId, trackDeps),
+        processTrack,
+        backOff: (ms) => {
+          // pause(true) does not wait for the active job: this runs from inside it.
+          void worker.pause(true);
+          clearTimeout(resumeTimer);
+          resumeTimer = setTimeout(() => {
+            void worker.resume();
+            log.info("Queue resumed after the back-off");
+          }, ms);
+          resumeTimer.unref();
+        },
       }),
     {
       connection: redis,
-      // Hard rule: browser jobs run one at a time.
+      // Hard rule: one download at a time.
       concurrency: 1,
       ...(options.queuePrefix === undefined ? {} : { prefix: options.queuePrefix }),
     },
@@ -156,15 +196,19 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
     key: options.heartbeatKey ?? WORKER_HEARTBEAT_KEY,
     log,
   });
-  log.info({ queue: queueName, concurrency: 1, dataDir }, "Worker ready, waiting for jobs");
+  log.info(
+    { queue: queueName, concurrency: 1, dataDir, nativeDownloadMode: env.NATIVE_DOWNLOAD_MODE },
+    "Worker ready, waiting for jobs",
+  );
 
   return {
     ok: true,
     worker: {
       close: async () => {
+        clearTimeout(resumeTimer);
         await worker.close();
         // Closed cleanly so the persistent profile is not corrupted.
-        await browser.close();
+        await browser?.close();
         await heartbeat.stop();
         await redis.quit();
         await db.close();

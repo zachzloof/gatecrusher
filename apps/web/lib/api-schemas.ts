@@ -141,7 +141,7 @@ export const playlistDetailResponseSchema = z.object({
 });
 export type PlaylistDetailResponse = z.infer<typeof playlistDetailResponseSchema>;
 
-/** What clicking "Run native tracks" did. */
+/** What clicking "Download native tracks" did. */
 export const runNativeResponseSchema = z.object({
   /** The run created for tracks that needed a new job, or null when none did. */
   runId: z.uuid().nullable(),
@@ -172,3 +172,22 @@ export const buyListResponseSchema = z.object({
   items: z.array(buyListItemSchema),
 });
 export type BuyListResponse = z.infer<typeof buyListResponseSchema>;
+
+/** A free-download gate the owner completes by hand (see docs/PIVOT.md). */
+const gateListItemSchema = z.object({
+  trackId: z.uuid(),
+  /** hypeddit, toneden, … or unknown. */
+  platform: z.string(),
+  title: z.string(),
+  artist: z.string(),
+  gateUrl: z.string(),
+  permalinkUrl: z.string(),
+  playlistId: z.uuid(),
+  playlistTitle: z.string(),
+});
+export type GateListItemDto = z.infer<typeof gateListItemSchema>;
+
+export const gateListResponseSchema = z.object({
+  items: z.array(gateListItemSchema),
+});
+export type GateListResponse = z.infer<typeof gateListResponseSchema>;

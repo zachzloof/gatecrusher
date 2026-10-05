@@ -5,6 +5,7 @@ import {
   getPlaylistTrackStates,
   getPlaylistWithTracks,
   listBuyTracks,
+  listGateTracks,
   listPlaylists,
   type Database,
   type PlaylistRow,
@@ -15,6 +16,7 @@ import {
   addPlaylistRequestSchema,
   addPlaylistResponseSchema,
   buyListResponseSchema,
+  gateListResponseSchema,
   listPlaylistsResponseSchema,
   playlistDetailResponseSchema,
   type PlaylistDto,
@@ -182,6 +184,34 @@ export function handleGetPlaylist(playlistId: string, deps: HandlerDeps): Promis
           purchaseTitle: track.purchaseTitle,
           ...toRunStateDto(states.get(track.id)),
         })),
+      }),
+      { headers: NO_STORE },
+    );
+  });
+}
+
+/** GET /api/gate-list — gate tracks with their links, for the owner to do by hand. */
+export function handleGateList(deps: HandlerDeps): Promise<Response> {
+  return guarded(deps.log, "GET /api/gate-list", async () => {
+    const rows = await withTimeout(listGateTracks(deps.db), READ_TIMEOUT_MS);
+    return Response.json(
+      gateListResponseSchema.parse({
+        items: rows.flatMap((row) => {
+          // A gate track always has a link; a row without one has nothing to open.
+          if (row.purchaseUrl === null) return [];
+          return [
+            {
+              trackId: row.trackId,
+              platform: row.gatePlatform ?? "unknown",
+              title: row.title,
+              artist: row.artist,
+              gateUrl: row.purchaseUrl,
+              permalinkUrl: row.permalinkUrl,
+              playlistId: row.playlistId,
+              playlistTitle: row.playlistTitle,
+            },
+          ];
+        }),
       }),
       { headers: NO_STORE },
     );

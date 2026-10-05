@@ -6,7 +6,12 @@ const PAGES = [
   { link: "Playlists", path: "/playlists", heading: "Playlists", empty: /No playlists yet/ },
   { link: "Runs", path: "/runs", heading: "Runs", empty: /No runs yet/ },
   { link: "Buy list", path: "/buy-list", heading: "Buy list", empty: /No tracks to buy yet/ },
-  { link: "Manual list", path: "/manual-list", heading: "Manual list", empty: /Nothing here/ },
+  {
+    link: "Manual list",
+    path: "/manual-list",
+    heading: "Manual list",
+    empty: /No gate tracks yet/,
+  },
   { link: "Evals", path: "/evals", heading: "Evals", empty: /No data yet/ },
   { link: "Settings", path: "/settings", heading: "Settings", empty: /DATABASE_URL/ },
 ] as const;

@@ -4,6 +4,8 @@ import type { Database } from "./client.ts";
 import {
   getPlaylistWithTracks,
   listBuyTracks,
+  listGateTracks,
+  listPlaylistDownloads,
   listPlaylists,
   savePlaylistIngest,
   type ClassifiedTrack,
@@ -249,6 +251,41 @@ describe("listPlaylists", () => {
 describe("getPlaylistWithTracks", () => {
   it("returns null for an unknown id", async () => {
     expect(await getPlaylistWithTracks(db, "00000000-0000-4000-8000-000000000000")).toBeNull();
+  });
+});
+
+describe("listGateTracks and listPlaylistDownloads", () => {
+  it("lists gate tracks with their platform, and a playlist's files in order", async () => {
+    const { playlistId } = await savePlaylistIngest(
+      db,
+      ingest({
+        tracks: [
+          track("1", { classification: "native", downloadable: true }),
+          track("2", {
+            classification: "gate",
+            gatePlatform: "hypeddit",
+            purchaseUrl: "https://hypeddit.com/track/two",
+          }),
+          track("3", { classification: "native", downloadable: true }),
+          track("4", { classification: "buy", purchaseUrl: "https://a.bandcamp.com/track/x" }),
+        ],
+      }),
+    );
+    await addDownload(await trackIdFor(playlistId, "3"));
+    await addDownload(await trackIdFor(playlistId, "1"));
+
+    const gates = await listGateTracks(db);
+    expect(gates.map((row) => [row.title, row.gatePlatform, row.purchaseUrl])).toEqual([
+      ["Track 2", "hypeddit", "https://hypeddit.com/track/two"],
+    ]);
+
+    const archive = await listPlaylistDownloads(db, playlistId);
+    expect(archive?.playlist.title).toBe("Fixture crate");
+    expect(archive?.files.map((file) => [file.position, file.title, file.filePath])).toEqual([
+      [0, "Track 1", "downloads/fixture/file.mp3"],
+      [2, "Track 3", "downloads/fixture/file.mp3"],
+    ]);
+    expect(await listPlaylistDownloads(db, "00000000-0000-4000-8000-000000000000")).toBeNull();
   });
 });
 

@@ -20,7 +20,12 @@ import {
   runNativeResponseSchema,
 } from "./api-schemas";
 import { handleGetPlaylist } from "./playlist-handlers";
-import { handleRunNative, handleScreenshot, type RunHandlerDeps } from "./run-handlers";
+import {
+  handleArchive,
+  handleRunNative,
+  handleScreenshot,
+  type RunHandlerDeps,
+} from "./run-handlers";
 
 // Real Postgres (a throwaway database) and a real data dir (a temp one); the queue is a
 // fake that records what it was handed.
@@ -216,7 +221,7 @@ describe("POST /api/playlists/:id/runs", () => {
     const failed = await handleRunNative(playlistId, depsWith({ failEnqueue: true }).deps);
 
     expect(failed.status).toBe(503);
-    expect((await errorOf(failed)).message).toContain("Click Run native tracks again");
+    expect((await errorOf(failed)).message).toContain("Click Download native tracks again");
     expect(await db.$count(schema.jobs)).toBe(2);
 
     const { deps, enqueued } = depsWith();
@@ -352,6 +357,75 @@ describe("GET /api/playlists/:id with run state", () => {
     // Server-side paths stay on the server.
     expect(body).not.toContain("downloads/fixture-crate");
     expect(body).not.toContain(dataDir);
+  });
+});
+
+describe("GET /api/playlists/:id/archive", () => {
+  const SONG = Buffer.from("ID3 fake audio ".repeat(100_000));
+
+  /** A playlist with its first native track downloaded and the file on disk. */
+  async function downloadedPlaylist() {
+    const playlistId = await seedPlaylist();
+    await handleRunNative(playlistId, depsWith().deps);
+    const [jobId] = await jobIdsInPlaylistOrder();
+    if (jobId === undefined) throw new Error("expected a job");
+    await startJob(db, { jobId, adapterId: "yt-dlp", resumedOnOpenPage: false });
+    const relative = "downloads/fixture-crate/Fixture Artist - Track n1.mp3";
+    await mkdir(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true });
+    await writeFile(path.join(dataDir, relative), SONG);
+    await completeJob(db, {
+      jobId,
+      download: {
+        path: relative,
+        sizeBytes: SONG.length,
+        mimeType: "audio/mpeg",
+        kind: "audio",
+        checksumSha256: "a".repeat(64),
+      },
+    });
+    return playlistId;
+  }
+
+  it("streams the playlist's files as one stored zip", async () => {
+    const playlistId = await downloadedPlaylist();
+
+    const response = await handleArchive(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("application/zip");
+    expect(response.headers.get("Content-Disposition")).toContain('filename="fixture-crate.zip"');
+    const zip = Buffer.from(await response.arrayBuffer());
+    // Local header, the file's name, the bytes themselves, and an end record.
+    expect(zip.readUInt32LE(0)).toBe(0x04034b50);
+    expect(zip.includes(Buffer.from("Fixture Artist - Track n1.mp3"))).toBe(true);
+    expect(zip.includes(SONG.subarray(0, 64))).toBe(true);
+    expect(zip.readUInt32LE(zip.length - 22)).toBe(0x06054b50);
+    expect(zip.length).toBeGreaterThan(SONG.length);
+  });
+
+  it("answers 404 when nothing has been downloaded yet", async () => {
+    const playlistId = await seedPlaylist();
+
+    const response = await handleArchive(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(404);
+    expect((await errorOf(response)).message).toContain("Nothing has been downloaded");
+  });
+
+  it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid"])(
+    "answers 404 for playlist %s",
+    async (id) => {
+      expect((await handleArchive(id, depsWith().deps)).status).toBe(404);
+    },
+  );
+
+  it("refuses to serve a recorded path outside the downloads folder", async () => {
+    const playlistId = await downloadedPlaylist();
+    await db.update(schema.downloads).set({ filePath: "../.env" });
+
+    const response = await handleArchive(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(500);
   });
 });
 

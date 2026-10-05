@@ -1,5 +1,13 @@
 # Gatecrusher
 
+> **Status (2026-10-05): browser automation is paused.** SoundCloud's anti-bot check
+> refused the Playwright browser, and hard rule 1 forbids evading it. Native downloads
+> now go through yt-dlp (`NATIVE_DOWNLOAD_MODE=yt-dlp`, the default); the browser path
+> stays in the repo but only runs with `NATIVE_DOWNLOAD_MODE=browser`. Gates are listed
+> for the owner to do by hand. **Do not launch a browser or make requests against
+> SoundCloud or gate sites from this machine while working on the code.** Points 2–4
+> below describe the original plan, not what runs today. See [docs/PIVOT.md](docs/PIVOT.md).
+
 Personal-use web app (single user, built to professional standards). It takes a SoundCloud playlist URL and:
 
 1. Classifies every track: **native** SoundCloud download / **gate** (third-party free-download gate such as Hypeddit, ToneDen) / **buy** (Bandcamp, Beatport, ...) / **none**.

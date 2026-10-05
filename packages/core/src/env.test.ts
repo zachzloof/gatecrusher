@@ -17,6 +17,8 @@ describe("parseEnv", () => {
         NODE_ENV: "development",
         LOG_LEVEL: "info",
         DATA_DIR: "./data",
+        YT_DLP_PATH: "yt-dlp",
+        NATIVE_DOWNLOAD_MODE: "yt-dlp",
         MIN_DOWNLOAD_BYTES: 1_048_576,
       },
     });
@@ -73,6 +75,7 @@ describe("parseEnv", () => {
     ["NODE_ENV", "staging"],
     ["MIN_DOWNLOAD_BYTES", "big"],
     ["MIN_DOWNLOAD_BYTES", "-5"],
+    ["NATIVE_DOWNLOAD_MODE", "playwright"],
   ])("rejects a malformed %s without echoing its value", (name, value) => {
     const result = parseEnv(workerEnvSchema, { ...valid, [name]: value });
 

@@ -35,6 +35,8 @@ beforeAll(async () => {
     DATABASE_URL: bed.database.url,
     REDIS_URL: process.env.REDIS_URL ?? "redis://localhost:6379",
     DATA_DIR: bed.dataDir,
+    // The paused browser path, exercised here against local fixtures only.
+    NATIVE_DOWNLOAD_MODE: "browser",
   });
   if (!env.ok) throw new Error(env.reason);
 

@@ -1,4 +1,20 @@
 import { describe, expect, it } from "vitest";
+import { formatBytes } from "./format";
+
+describe("formatBytes", () => {
+  it.each([
+    [0, "0 B"],
+    [999, "999 B"],
+    [1_000, "1 KB"],
+    [940_000, "940 KB"],
+    [9_400_000, "9.4 MB"],
+    [1_234_567_890, "1.2 GB"],
+    [-1, "—"],
+    [Number.NaN, "—"],
+  ])("%s -> %s", (bytes, text) => {
+    expect(formatBytes(bytes)).toBe(text);
+  });
+});
 import { displayUrl, formatDuration, middleTruncate, safeHref } from "./format";
 
 describe("formatDuration", () => {

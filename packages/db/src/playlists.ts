@@ -1,4 +1,9 @@
-import type { IngestSource, IngestedTrack, TrackClassification } from "@gatecrusher/core";
+import type {
+  DownloadKind,
+  IngestSource,
+  IngestedTrack,
+  TrackClassification,
+} from "@gatecrusher/core";
 import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
 import type { Database } from "./client.ts";
 import { downloads, jobs, playlists, tracks } from "./schema.ts";
@@ -206,19 +211,23 @@ export async function getPlaylistWithTracks(
   return { ...playlist, tracks: rows };
 }
 
-export interface BuyTrackRow {
+export interface LinkedTrackRow {
   trackId: string;
   title: string;
   artist: string;
   permalinkUrl: string;
   purchaseUrl: string | null;
   purchaseTitle: string | null;
+  gatePlatform: string | null;
   playlistId: string;
   playlistTitle: string;
 }
 
-/** Every `buy` track across all playlists, grouped by playlist in playlist order. */
-export async function listBuyTracks(db: Database): Promise<BuyTrackRow[]> {
+/** Every track of one classification across all playlists, in playlist order. */
+async function listTracksClassified(
+  db: Database,
+  classification: TrackClassification,
+): Promise<LinkedTrackRow[]> {
   return db
     .select({
       trackId: tracks.id,
@@ -227,11 +236,58 @@ export async function listBuyTracks(db: Database): Promise<BuyTrackRow[]> {
       permalinkUrl: tracks.permalinkUrl,
       purchaseUrl: tracks.purchaseUrl,
       purchaseTitle: tracks.purchaseTitle,
+      gatePlatform: tracks.gatePlatform,
       playlistId: playlists.id,
       playlistTitle: playlists.title,
     })
     .from(tracks)
     .innerJoin(playlists, eq(tracks.playlistId, playlists.id))
-    .where(eq(tracks.classification, "buy"))
+    .where(eq(tracks.classification, classification))
     .orderBy(asc(playlists.title), asc(playlists.id), asc(tracks.position), asc(tracks.id));
+}
+
+/** Every `buy` track: for sale, never bought by the app. */
+export function listBuyTracks(db: Database): Promise<LinkedTrackRow[]> {
+  return listTracksClassified(db, "buy");
+}
+
+/** Every `gate` track: a free-download gate the owner completes by hand for now. */
+export function listGateTracks(db: Database): Promise<LinkedTrackRow[]> {
+  return listTracksClassified(db, "gate");
+}
+
+export interface PlaylistDownloadRow {
+  trackId: string;
+  position: number;
+  title: string;
+  artist: string;
+  /** Relative to the data dir. */
+  filePath: string;
+  sizeBytes: number;
+  kind: DownloadKind;
+}
+
+/** A playlist's verified downloads in playlist order, or `null` for an unknown playlist. */
+export async function listPlaylistDownloads(
+  db: Database,
+  playlistId: string,
+): Promise<{ playlist: PlaylistRow; files: PlaylistDownloadRow[] } | null> {
+  const [playlist] = await db.select().from(playlists).where(eq(playlists.id, playlistId));
+  if (playlist === undefined) return null;
+
+  const files = await db
+    .select({
+      trackId: tracks.id,
+      position: tracks.position,
+      title: tracks.title,
+      artist: tracks.artist,
+      filePath: downloads.filePath,
+      sizeBytes: downloads.sizeBytes,
+      kind: downloads.kind,
+    })
+    .from(downloads)
+    .innerJoin(tracks, eq(downloads.trackId, tracks.id))
+    .where(eq(tracks.playlistId, playlistId))
+    .orderBy(asc(tracks.position), asc(tracks.id));
+  return { playlist, files };
 }

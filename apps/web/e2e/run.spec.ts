@@ -84,7 +84,7 @@ async function fakePlaylist(
   };
 }
 
-/** Fakes "Run native tracks" and counts the clicks that reached the server. */
+/** Fakes "Download native tracks" and counts the clicks that reached the server. */
 async function fakeRun(
   page: Page,
   status: number,
@@ -100,7 +100,7 @@ async function fakeRun(
 
 const trackRows = (page: Page) => page.getByRole("table", { name: "Tracks" }).locator("tbody tr");
 const runBar = (page: Page) => page.getByRole("region", { name: "Native downloads" });
-const runButton = (page: Page) => page.getByRole("button", { name: "Run native tracks" });
+const runButton = (page: Page) => page.getByRole("button", { name: "Download native tracks" });
 
 test.beforeEach(async ({ page }) => {
   await fakeApi(page);
@@ -154,7 +154,7 @@ test("a paused track shows what it needs and its screenshot, and running again r
   await expect(paused).toContainText("Fixture Artist — Native Download (Original Mix)");
   await expect(paused).toContainText("Solve the captcha in the worker's browser window.");
   await expect(paused).toContainText("step open-more");
-  await expect(paused).toContainText("click Run native tracks again");
+  await expect(paused).toContainText("click Download native tracks again");
 
   const screenshot = paused.getByRole("img", { name: /showing a captcha/ });
   await expect(screenshot).toBeVisible();

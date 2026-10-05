@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { EmptyState } from "@/components/empty-state";
+import { GateListView } from "@/components/gate-list-view";
 import { PageHeader } from "@/components/page-header";
 
 export const metadata: Metadata = { title: "Manual list" };
@@ -9,12 +9,9 @@ export default function ManualListPage() {
     <>
       <PageHeader
         title="Manual list"
-        description="Tracks that could not be downloaded automatically, each with a reason and a link."
+        description="Free-download gates to complete by hand in your own browser. Gatecrusher lists the links; automating gates is paused."
       />
-      <EmptyState>
-        Nothing here. Tracks land on this list only when a link is dead, a file is gone, an account
-        is required, or you give up on one.
-      </EmptyState>
+      <GateListView />
     </>
   );
 }

@@ -10,10 +10,21 @@ const baseShape = {
 };
 
 const dataDir = z.string().min(1).default("./data");
+const ytDlpPath = z.string().min(1).default("yt-dlp");
+
+/**
+ * How native (uploader-enabled) downloads are fetched. `yt-dlp` asks yt-dlp for the
+ * uploader's original file and never opens a browser. `browser` is the paused slice 3
+ * path: it drives a visible browser, which SoundCloud's anti-bot check refused — see
+ * docs/PIVOT.md. It stays available only by explicit choice.
+ */
+export const NATIVE_DOWNLOAD_MODES = ["yt-dlp", "browser"] as const;
+export const nativeDownloadModeSchema = z.enum(NATIVE_DOWNLOAD_MODES);
+export type NativeDownloadMode = z.infer<typeof nativeDownloadModeSchema>;
 
 export const webEnvSchema = z.object({
   ...baseShape,
-  YT_DLP_PATH: z.string().min(1).default("yt-dlp"),
+  YT_DLP_PATH: ytDlpPath,
   DATA_DIR: dataDir,
 });
 export type WebEnv = z.infer<typeof webEnvSchema>;
@@ -21,6 +32,8 @@ export type WebEnv = z.infer<typeof webEnvSchema>;
 export const workerEnvSchema = z.object({
   ...baseShape,
   DATA_DIR: dataDir,
+  YT_DLP_PATH: ytDlpPath,
+  NATIVE_DOWNLOAD_MODE: nativeDownloadModeSchema.default("yt-dlp"),
   MIN_DOWNLOAD_BYTES: z.coerce
     .number({ error: "must be a number of bytes" })
     .int()
@@ -124,10 +137,17 @@ export const ENV_VAR_DOCS: readonly EnvVarDoc[] = [
   },
   {
     name: "YT_DLP_PATH",
-    usedBy: ["web"],
+    usedBy: ["web", "worker"],
     required: false,
     description:
-      "yt-dlp executable, used for playlist metadata when SoundCloud's API fails. Defaults to yt-dlp on PATH.",
+      "yt-dlp executable: the worker downloads native tracks with it, web uses it for playlist metadata when SoundCloud's API fails. Defaults to yt-dlp on PATH.",
+  },
+  {
+    name: "NATIVE_DOWNLOAD_MODE",
+    usedBy: ["worker"],
+    required: false,
+    description:
+      "yt-dlp (default, no browser) or browser (the paused slice 3 path; see docs/PIVOT.md).",
   },
   {
     name: "DATA_DIR",

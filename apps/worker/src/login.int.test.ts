@@ -43,7 +43,8 @@ function login(overrides: Partial<Parameters<typeof runLogin>[0]> = {}) {
     signInUrl: server.pageUrl("signed-out"),
     homeUrl: server.pageUrl("track"),
     pollMs: 20,
-    timeoutMs: 10_000,
+    // Generous: the whole worker suite runs browsers in parallel on one machine.
+    timeoutMs: 25_000,
     ...overrides,
   });
 }

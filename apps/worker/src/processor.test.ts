@@ -10,18 +10,26 @@ import { processJob } from "./processor.ts";
 
 const JOB_ID = "0b0e8c0e-6f5d-4c1e-9a43-2f6f1f0c7a11";
 
-function fakeDeps(outcome: TrackJobResult["outcome"] = "succeeded") {
+function fakeDeps(outcome: TrackJobResult["outcome"] = "succeeded", backOffMs?: number) {
   const processed: string[] = [];
   const delays: DelayKind[] = [];
+  const backedOff: number[] = [];
   return {
     processed,
     delays,
+    backedOff,
     deps: {
       log: pino({ level: "silent" }),
       now: () => new Date("2026-10-01T12:00:05.000Z"),
-      processTrack: (jobId: string): Promise<TrackJobResult> => {
+      processTrack: (jobId: string) => {
         processed.push(jobId);
-        return Promise.resolve({ jobId, outcome });
+        return Promise.resolve({
+          result: { jobId, outcome },
+          ...(backOffMs === undefined ? {} : { backOffMs }),
+        });
+      },
+      backOff: (ms: number) => {
+        backedOff.push(ms);
       },
       delay: {
         wait: (kind: DelayKind) => {
@@ -76,6 +84,15 @@ describe("processJob", () => {
       expect(fake.delays).toEqual(["between-jobs"]);
     },
   );
+
+  it("backs off when the site pushed back, and still pauses between jobs", async () => {
+    const fake = fakeDeps("failed", 600_000);
+
+    await processJob({ name: "track", data: { jobId: JOB_ID } }, fake.deps);
+
+    expect(fake.backedOff).toEqual([600_000]);
+    expect(fake.delays).toEqual(["between-jobs"]);
+  });
 
   it("does not pause after a track job that had nothing to do", async () => {
     const fake = fakeDeps("skipped");

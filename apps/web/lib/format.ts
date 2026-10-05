@@ -10,6 +10,15 @@ export function formatDuration(durationMs: number | null): string {
     : `${minutes}:${seconds}`;
 }
 
+/** `1.2 MB`, `940 KB`, `3.1 GB`: one decimal from megabytes up. */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "—";
+  if (bytes < 1_000) return `${bytes} B`;
+  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
+  if (bytes < 1_000_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+}
+
 /** Shortens long text in the middle, keeping both ends readable: `hypeddit.com/tr…/abc123`. */
 export function middleTruncate(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;

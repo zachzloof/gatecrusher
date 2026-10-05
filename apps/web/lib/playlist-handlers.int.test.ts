@@ -5,6 +5,7 @@ import {
   addPlaylistResponseSchema,
   apiErrorSchema,
   buyListResponseSchema,
+  gateListResponseSchema,
   listPlaylistsResponseSchema,
   playlistDetailResponseSchema,
 } from "./api-schemas";
@@ -12,6 +13,7 @@ import { ingestPlaylist } from "./ingest";
 import {
   handleAddPlaylist,
   handleBuyList,
+  handleGateList,
   handleGetPlaylist,
   handleListPlaylists,
   type HandlerDeps,
@@ -298,6 +300,29 @@ describe("GET /api/playlists/:id", () => {
       expect((await errorOf(response)).code).toBe("not_found");
     },
   );
+});
+
+describe("GET /api/gate-list", () => {
+  it("lists gate tracks with their platform and link", async () => {
+    const { deps } = depsWith();
+    const added = addPlaylistResponseSchema.parse(
+      await (await post({ url: PLAYLIST_URL }, deps)).json(),
+    );
+
+    const body = gateListResponseSchema.parse(await (await handleGateList(deps)).json());
+
+    expect(body.items.map((item) => [item.platform, item.title, item.gateUrl])).toEqual([
+      ["hypeddit", "Gated Bootleg", "https://hypeddit.com/track/fixture1"],
+      ["unknown", "Short Link Free DL", "https://bit.ly/fixture5"],
+    ]);
+    expect(body.items[0]).toMatchObject({ playlistId: added.playlistId, artist: "Fixture Artist" });
+  });
+
+  it("is empty before anything is ingested", async () => {
+    const body = gateListResponseSchema.parse(await (await handleGateList(depsWith().deps)).json());
+
+    expect(body).toEqual({ items: [] });
+  });
 });
 
 describe("GET /api/buy-list", () => {

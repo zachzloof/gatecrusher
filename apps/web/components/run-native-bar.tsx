@@ -1,9 +1,10 @@
 "use client";
 
-import { Play } from "lucide-react";
+import { FolderArchive, Play } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { apiErrorSchema, runNativeResponseSchema, type TrackDto } from "@/lib/api-schemas";
+import { formatBytes } from "@/lib/format";
 import { nativeProgress, progressSummary, runResultMessage } from "@/lib/track-status";
 import { cn } from "@/lib/utils";
 
@@ -47,8 +48,9 @@ interface RunNativeBarProps {
 }
 
 /**
- * The playlist's one primary action. Clicking it again is how paused tracks are
- * retried in this slice, so it stays available while a run is in progress.
+ * The playlist's one primary action, plus the zip of what it has produced. Clicking
+ * "Download native tracks" again is how failed or paused tracks are retried, so it
+ * stays available while a run is in progress.
  */
 export function RunNativeBar({ playlistId, tracks, onStarted }: RunNativeBarProps) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
@@ -56,6 +58,11 @@ export function RunNativeBar({ playlistId, tracks, onStarted }: RunNativeBarProp
 
   const starting = outcome.kind === "starting";
   const nothingLeft = progress.downloaded === progress.native;
+  const downloaded = tracks.filter((track) => track.download !== null);
+  const downloadedBytes = downloaded.reduce(
+    (total, track) => total + (track.download?.sizeBytes ?? 0),
+    0,
+  );
 
   async function handleClick(): Promise<void> {
     if (starting) return;
@@ -80,8 +87,21 @@ export function RunNativeBar({ playlistId, tracks, onStarted }: RunNativeBarProp
         disabled={starting || nothingLeft}
       >
         <Play aria-hidden="true" />
-        {starting ? "Starting…" : "Run native tracks"}
+        {starting ? "Starting…" : "Download native tracks"}
       </Button>
+      {downloaded.length > 0 ? (
+        <Button asChild>
+          <a href={`/api/playlists/${encodeURIComponent(playlistId)}/archive`} download>
+            <FolderArchive aria-hidden="true" />
+            {`Download zip · ${downloaded.length} ${downloaded.length === 1 ? "file" : "files"}, ${formatBytes(downloadedBytes)}`}
+          </a>
+        </Button>
+      ) : (
+        <Button disabled>
+          <FolderArchive aria-hidden="true" />
+          Download zip
+        </Button>
+      )}
       <div className="min-w-0 flex-1 basis-full text-13 sm:basis-0">
         <p aria-live="polite" className="font-mono text-xs leading-5 text-text-muted tabular-nums">
           {progressSummary(progress)}

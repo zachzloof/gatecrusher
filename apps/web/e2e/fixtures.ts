@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import type {
   AddPlaylistResponse,
   BuyListResponse,
+  GateListResponse,
   ListPlaylistsResponse,
   PlaylistDetailResponse,
   TrackDto,
@@ -102,10 +103,24 @@ export const BUY_LIST: BuyListResponse = {
   })),
 };
 
+export const GATE_LIST: GateListResponse = {
+  items: TRACKS.filter((item) => item.classification === "gate").map((item) => ({
+    trackId: item.id,
+    platform: item.gatePlatform ?? "unknown",
+    title: item.title,
+    artist: item.artist,
+    gateUrl: item.purchaseUrl ?? "",
+    permalinkUrl: item.permalinkUrl,
+    playlistId: PLAYLIST_ID,
+    playlistTitle: "Fixture Crate",
+  })),
+};
+
 export interface FakeApi {
   playlists?: ListPlaylistsResponse;
   detail?: PlaylistDetailResponse;
   buyList?: BuyListResponse;
+  gateList?: GateListResponse;
 }
 
 /** Answers the data routes from memory. Routes that are not listed stay real. */
@@ -122,6 +137,9 @@ export async function fakeApi(page: Page, api: FakeApi = {}): Promise<void> {
       : route.fallback(),
   );
   await page.route("**/api/buy-list", (route) => route.fulfill(json(api.buyList ?? { items: [] })));
+  await page.route("**/api/gate-list", (route) =>
+    route.fulfill(json(api.gateList ?? { items: [] })),
+  );
   if (api.detail !== undefined) {
     const { detail } = api;
     await page.route(`**/api/playlists/${detail.playlist.id}`, (route) =>

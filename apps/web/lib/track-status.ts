@@ -109,7 +109,7 @@ export function progressSummary(progress: NativeProgress): string {
 
 const tracks = (count: number): string => `${count} ${count === 1 ? "track" : "tracks"}`;
 
-/** What clicking "Run native tracks" did, in plain words. */
+/** What clicking "Download native tracks" did, in plain words. */
 export function runResultMessage(result: RunNativeResponse): string {
   const parts: string[] = [];
   if (result.queued > 0) parts.push(`Queued ${tracks(result.queued)}.`);

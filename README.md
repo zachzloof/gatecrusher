@@ -5,11 +5,11 @@ download / free-download gate / buy / none), completes the free-download gates w
 dedicated burner account in a visible browser, and hands over to you whenever a step
 needs a human.
 
-**Status: slice 3 (browser runtime).** Paste a SoundCloud playlist URL and every track
-is stored and classified; the buy list exports to CSV; **Run native tracks** downloads
-the tracks that have SoundCloud's own download button, in a visible browser signed in as
-the burner account, and verifies every file. Free-download gates come next — see
-[docs/SLICES.md](docs/SLICES.md) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+**Status (2026-10-05): browser automation paused; yt-dlp for native tracks.** Paste a
+SoundCloud playlist URL and every track is stored and classified. Tracks whose uploader
+enabled SoundCloud's own download are fetched with yt-dlp (no browser), verified, and
+bundled into one zip per playlist. Gate tracks and buy tracks are listed with their links
+for you to handle by hand. Why, and what is paused: [docs/PIVOT.md](docs/PIVOT.md).
 
 ## What runs where
 
@@ -19,8 +19,8 @@ the burner account, and verifies every file. Free-download gates come next — s
 | Web (UI + API), `apps/web` | natively, with hot reload | `pnpm dev`                              |
 | Worker, `apps/worker`      | **natively, always**      | `pnpm --filter @gatecrusher/worker dev` |
 
-The worker is never containerised: it drives a headed browser that you need to see and
-act in when a captcha or login prompt appears. It refuses to start headless.
+The worker is never containerised. In today's default mode it runs yt-dlp, no browser.
+(The paused browser mode would need a visible window and refuses to start headless.)
 
 ## 5-minute local setup
 
@@ -87,31 +87,26 @@ fallback is simply unavailable.
 
 ### Downloading native tracks
 
-One-time: install the browser and log the burner account in (worker stopped — a browser
-profile can only be open in one browser at a time):
+You need [yt-dlp](https://github.com/yt-dlp/yt-dlp) on your `PATH` (or `YT_DLP_PATH`
+in `.env`). With the worker running, open a playlist and click **Download native
+tracks**. For every track whose uploader enabled SoundCloud's own download, the worker
+asks yt-dlp for that file — the uploader's original, the best quality SoundCloud has —
+one track at a time, with a pause between tracks. Nothing else is fetched: a track
+without an uploader-enabled download is never pulled from its stream.
 
-```sh
-pnpm --filter @gatecrusher/worker exec playwright install chromium
-pnpm --filter @gatecrusher/worker run login
-```
+Each file is verified (size, and content sniffed from its bytes as audio or a zip
+containing audio) before it counts, and lands in
+`data/downloads/<playlist-slug>/<artist> - <title>.<ext>`. Tracks already downloaded
+are skipped on the next click; failed ones are retried. If SoundCloud answers 403 or
+429, the worker marks that track failed and takes no jobs for ten minutes.
 
-A Chromium window opens on SoundCloud's sign-in page. Sign in by hand; the script only
-watches for the signed-in page, never reads what you type, and exits once the session is
-confirmed. The session lives in `data/browser-profile/` and nowhere else.
+**Download zip** on the playlist page bundles every verified file of that playlist into
+one archive, streamed straight from disk.
 
-Then, with the worker running, open a playlist and click **Run native tracks**. Native
-tracks are processed one at a time with human-like pauses. Each file is verified (size,
-and content sniffed from its bytes as audio or a zip containing audio) before it counts,
-and lands in `data/downloads/<playlist-slug>/<artist> - <title>.<ext>`. Tracks already
-downloaded are skipped.
+**Buy list** and **Manual list** hold the tracks with a store link or a free-download
+gate link, each exportable as CSV, for you to handle in your own browser.
 
-If something needs you — a captcha, a sign-in prompt, a page the adapter does not
-recognise — the track shows **Needs you**, with what to do and a screenshot, and its tab
-stays open in the worker's browser while the other tracks carry on. Deal with it in that
-window, then click **Run native tracks** again to retry. A track only becomes **Manual**
-when it is genuinely unobtainable (removed, or its download was switched off).
-
-The full manual check is in [docs/SMOKE.md](docs/SMOKE.md).
+The manual check is in [docs/SMOKE.md](docs/SMOKE.md).
 
 ### If a port is already taken
 
@@ -143,22 +138,21 @@ values.
 
 ## Commands
 
-| Command                                       | What it does                                                    |
-| --------------------------------------------- | --------------------------------------------------------------- |
-| `pnpm dev`                                    | Web with hot reload, on `127.0.0.1:3000`                        |
-| `pnpm --filter @gatecrusher/worker dev`       | Worker, restarting on file changes                              |
-| `pnpm --filter @gatecrusher/worker start`     | Worker, without the file watcher                                |
-| `pnpm --filter @gatecrusher/worker run login` | One-time interactive login of the burner SoundCloud account     |
-| `pnpm build`                                  | Production build                                                |
-| `pnpm lint`                                   | ESLint across the workspace                                     |
-| `pnpm typecheck`                              | `tsc --noEmit` across the workspace                             |
-| `pnpm test`                                   | Unit + integration tests (needs `docker compose up -d`)         |
-| `pnpm test:unit`                              | Unit tests only, no services needed                             |
-| `pnpm test:e2e`                               | Playwright UI tests (headless; no services needed)              |
-| `pnpm format`                                 | Prettier                                                        |
-| `pnpm db:generate`                            | Generate a migration after changing `packages/db/src/schema.ts` |
-| `pnpm db:migrate`                             | Apply pending migrations                                        |
-| `pnpm db:seed`                                | Insert / refresh the fake seed playlist                         |
+| Command                                   | What it does                                                    |
+| ----------------------------------------- | --------------------------------------------------------------- |
+| `pnpm dev`                                | Web with hot reload, on `127.0.0.1:3000`                        |
+| `pnpm --filter @gatecrusher/worker dev`   | Worker, restarting on file changes                              |
+| `pnpm --filter @gatecrusher/worker start` | Worker, without the file watcher                                |
+| `pnpm build`                              | Production build                                                |
+| `pnpm lint`                               | ESLint across the workspace                                     |
+| `pnpm typecheck`                          | `tsc --noEmit` across the workspace                             |
+| `pnpm test`                               | Unit + integration tests (needs `docker compose up -d`)         |
+| `pnpm test:unit`                          | Unit tests only, no services needed                             |
+| `pnpm test:e2e`                           | Playwright UI tests (headless; no services needed)              |
+| `pnpm format`                             | Prettier                                                        |
+| `pnpm db:generate`                        | Generate a migration after changing `packages/db/src/schema.ts` |
+| `pnpm db:migrate`                         | Apply pending migrations                                        |
+| `pnpm db:seed`                            | Insert / refresh the fake seed playlist                         |
 
 First time running the tests: `pnpm --filter @gatecrusher/web exec playwright install chromium`
 (the adapter and worker integration tests and the UI e2e all use it, headless).
