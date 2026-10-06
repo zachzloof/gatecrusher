@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchPlaylistFromApiV2, HYDRATE_BATCH_SIZE } from "./api-v2";
+import { fetchPlaylistFromApiV2, HYDRATE_BATCH_SIZE, verifySoundcloudToken } from "./api-v2";
 import { createMemoryClientIdCache, discoverClientId } from "./client-id";
 import {
   createFakeSoundcloud,
@@ -302,5 +302,54 @@ describe("fetchPlaylistFromApiV2", () => {
 
     expect(result).toMatchObject({ ok: false, kind: "unavailable" });
     expect(JSON.stringify(result)).not.toContain(FIXTURE_CLIENT_ID);
+  });
+});
+
+describe("verifySoundcloudToken", () => {
+  // Made-up value in the shape SoundCloud uses; never a real token.
+  const TOKEN = "2-290123-123456789-aBcDeFgHiJkLmN";
+
+  function verify(options: FakeSoundcloudOptions) {
+    const soundcloud = createFakeSoundcloud(options);
+    const clientIds = createMemoryClientIdCache();
+    clientIds.set(FIXTURE_CLIENT_ID);
+    return {
+      soundcloud,
+      result: verifySoundcloudToken({ fetch: soundcloud.fetch, clientIds }, TOKEN),
+    };
+  }
+
+  it("says who the token belongs to, sending it only in the Authorization header", async () => {
+    const { soundcloud, result } = verify({
+      me: { token: TOKEN, body: { id: 290123, username: "burner-digger", city: "Leeds" } },
+    });
+
+    expect(await result).toEqual({
+      ok: true,
+      soundcloudUserId: "290123",
+      username: "burner-digger",
+    });
+    expect(soundcloud.headers).toEqual([{ Authorization: `OAuth ${TOKEN}` }]);
+    expect(soundcloud.requests.map((url) => url.toString()).join(" ")).not.toContain(TOKEN);
+  });
+
+  it("reports a token SoundCloud refuses as rejected, without repeating it", async () => {
+    const { result } = verify({ me: { token: "2-other-token-0000000000", body: {} } });
+
+    const answer = await result;
+    expect(answer).toMatchObject({ ok: false, kind: "rejected" });
+    expect(JSON.stringify(answer)).not.toContain(TOKEN);
+  });
+
+  it("reports an unexpected /me answer as unavailable", async () => {
+    const { result } = verify({ me: { token: TOKEN, body: { nope: true } } });
+
+    expect(await result).toMatchObject({ ok: false, kind: "unavailable" });
+  });
+
+  it("reports SoundCloud being down as unavailable, not as a bad token", async () => {
+    const { result } = verify({ me: { token: TOKEN, status: 503, body: {} } });
+
+    expect(await result).toMatchObject({ ok: false, kind: "unavailable" });
   });
 });

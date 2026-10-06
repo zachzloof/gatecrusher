@@ -3,6 +3,7 @@ import { Check, Minus, X } from "lucide-react";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/page-header";
 import { SectionLabel } from "@/components/section-label";
+import { SoundcloudAccountPanel } from "@/components/soundcloud-account-panel";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -48,8 +49,10 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Configuration comes from the .env file in the repo root. Values are never shown here."
+        description="The SoundCloud account downloads run as, and the configuration from the .env file in the repo root. Secret values are never shown here."
       />
+
+      <SoundcloudAccountPanel />
 
       <section aria-labelledby="env-heading">
         <SectionLabel id="env-heading">Environment</SectionLabel>

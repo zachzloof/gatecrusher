@@ -2,6 +2,7 @@ import type { IngestedTrack } from "@gatecrusher/core";
 import { describeError, discoverClientId, type ClientIdCache } from "./client-id";
 import { httpsUrl, trackFromApi } from "./map-track";
 import {
+  apiMeSchema,
   apiPlaylistSchema,
   apiResolvedSchema,
   apiTrackSchema,
@@ -34,6 +35,7 @@ async function apiGet(
   deps: ApiV2Deps,
   path: string,
   params: Record<string, string>,
+  headers: Record<string, string> = {},
 ): Promise<ApiResponse> {
   const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
@@ -48,7 +50,7 @@ async function apiGet(
 
     const url = `${API_BASE}${path}?${new URLSearchParams({ ...params, client_id: clientId }).toString()}`;
     try {
-      const response = await deps.fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      const response = await deps.fetch(url, { signal: AbortSignal.timeout(timeoutMs), headers });
       if (response.status === 401 || response.status === 403) {
         deps.clientIds.set(null);
         if (attempt === 1) continue;
@@ -62,6 +64,40 @@ async function apiGet(
   }
   // Unreachable: the second attempt always returns. Kept so every path has a result.
   return { ok: false, kind: "unreachable", reason: "no response from api-v2" };
+}
+
+export type VerifyTokenResult =
+  | { ok: true; soundcloudUserId: string; username: string }
+  /** SoundCloud refused the token: mistyped, expired, or the account signed out. */
+  | { ok: false; kind: "rejected"; reason: string }
+  /** SoundCloud could not be asked; the token may be fine. */
+  | { ok: false; kind: "unavailable"; reason: string };
+
+/**
+ * Asks api-v2 who a login token belongs to (`/me`), the same check the SoundCloud web
+ * app makes. The token travels only in the Authorization header, and never appears in
+ * a result or a reason. Never rejects.
+ */
+export async function verifySoundcloudToken(
+  deps: ApiV2Deps,
+  oauthToken: string,
+): Promise<VerifyTokenResult> {
+  const me = await apiGet(deps, "/me", {}, { Authorization: `OAuth ${oauthToken}` });
+  if (!me.ok) {
+    if (me.kind === "http" && (me.status === 401 || me.status === 403)) {
+      return { ok: false, kind: "rejected", reason: `SoundCloud answered ${me.status}` };
+    }
+    return { ok: false, kind: "unavailable", reason: describeFailure("/me", me) };
+  }
+  const user = apiMeSchema.safeParse(me.body);
+  if (!user.success) {
+    return { ok: false, kind: "unavailable", reason: "/me returned an unexpected response" };
+  }
+  return {
+    ok: true,
+    soundcloudUserId: String(user.data.id),
+    username: user.data.username.trim() || `user ${user.data.id}`,
+  };
 }
 
 function unavailable(reason: string): SourceResult {

@@ -228,3 +228,25 @@ export const humanRequests = pgTable(
       .where(sql`${table.status} = 'OPEN'`),
   ],
 );
+
+/**
+ * The SoundCloud login the worker hands to yt-dlp: an `oauth_token` the owner copied from
+ * their own browser on the Connect SoundCloud page. Never a password. One row at most.
+ * The token is a credential: it leaves this table only for yt-dlp's temporary cookie
+ * file, and is never logged or returned by an API.
+ */
+export const soundcloudAccount = pgTable(
+  "soundcloud_account",
+  {
+    id: integer("id").primaryKey().default(1),
+    oauthToken: text("oauth_token").notNull(),
+    /** The account's SoundCloud user id and name, as SoundCloud reported them. */
+    soundcloudUserId: text("soundcloud_user_id").notNull(),
+    username: text("username").notNull(),
+    /** When SoundCloud last accepted the token. */
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [check("soundcloud_account_single_row", sql`${table.id} = 1`)],
+);

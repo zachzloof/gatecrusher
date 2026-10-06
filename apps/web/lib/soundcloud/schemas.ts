@@ -7,6 +7,12 @@ const apiUserSchema = z.object({
   avatar_url: z.string().nullish(),
 });
 
+/** `/me`: the account a login token belongs to. */
+export const apiMeSchema = z.object({
+  id: z.number().int(),
+  username: z.string(),
+});
+
 /** A fully hydrated api-v2 track. */
 export const apiTrackSchema = z.object({
   id: z.number().int(),

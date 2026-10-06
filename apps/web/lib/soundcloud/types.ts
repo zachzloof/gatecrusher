@@ -1,7 +1,10 @@
 import type { IngestedPlaylist } from "@gatecrusher/core";
 
 /** The slice of `fetch` the SoundCloud clients use, so tests can hand in a fake. */
-export type FetchLike = (url: string, init?: { signal?: AbortSignal }) => Promise<Response>;
+export type FetchLike = (
+  url: string,
+  init?: { signal?: AbortSignal; headers?: Record<string, string> },
+) => Promise<Response>;
 
 /**
  * What a metadata source (api-v2 or yt-dlp) answers for a playlist URL.

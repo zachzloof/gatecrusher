@@ -16,6 +16,7 @@ import {
   type BrowserLauncher,
   type BrowserSession,
 } from "./browser.ts";
+import { removeStaleCookieFiles } from "./cookie-file.ts";
 import { startHeartbeat } from "./heartbeat.ts";
 import { createParkedPages } from "./parked-pages.ts";
 import { browserProfileDir, resolveDataDir } from "./paths.ts";
@@ -144,6 +145,8 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
     processTrack = async (jobId) => ({ result: await processTrackJob(jobId, trackDeps) });
     log.warn("NATIVE_DOWNLOAD_MODE=browser: the paused browser path is on (see docs/PIVOT.md)");
   } else {
+    // A worker that died mid-job can leave a login cookie file behind.
+    await removeStaleCookieFiles(dataDir);
     const ytDlpDeps = {
       db: db.db,
       log,

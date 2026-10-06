@@ -34,12 +34,16 @@ export interface FakeSoundcloudOptions {
   rejectStatus?: 401 | 403;
   /** Status of the soundcloud.com home page. */
   homeStatus?: number;
+  /** The login token `/me` accepts, and who it belongs to. Default: none is accepted. */
+  me?: { token: string; status?: number; body: unknown };
 }
 
 export interface FakeSoundcloud {
   fetch: FetchLike;
   /** Every requested URL, in order. */
   requests: URL[];
+  /** The headers sent with each request, in the same order. */
+  headers: Array<Record<string, string>>;
   count(pathname: string): number;
 }
 
@@ -51,10 +55,11 @@ export function createFakeSoundcloud(options: FakeSoundcloudOptions = {}): FakeS
     options.tracks ??
     z.array(z.looseObject({ id: z.number() })).parse(fixtureJson("tracks-hydrated.json"));
   const requests: URL[] = [];
+  const headers: Array<Record<string, string>> = [];
 
   const json = ({ status, body }: FakeResponse): Response => Response.json(body, { status });
 
-  const answer = (url: URL): Response => {
+  const answer = (url: URL, sent: Record<string, string>): Response => {
     if (url.origin === "https://soundcloud.com" && url.pathname === "/") {
       return new Response(fixtureText("home.html"), { status: options.homeStatus ?? 200 });
     }
@@ -76,6 +81,13 @@ export function createFakeSoundcloud(options: FakeSoundcloudOptions = {}): FakeS
         };
         return json(typeof resolve === "function" ? resolve() : resolve);
       }
+      if (url.pathname === "/me") {
+        const { me } = options;
+        if (me === undefined || sent.Authorization !== `OAuth ${me.token}`) {
+          return json({ status: 401, body: {} });
+        }
+        return json({ status: me.status ?? 200, body: me.body });
+      }
       if (url.pathname === "/tracks") {
         const ids = new Set((url.searchParams.get("ids") ?? "").split(",").map(Number));
         return json({ status: 200, body: tracks.filter((track) => ids.has(track.id)) });
@@ -86,12 +98,15 @@ export function createFakeSoundcloud(options: FakeSoundcloudOptions = {}): FakeS
 
   return {
     requests,
+    headers,
     count: (pathname) => requests.filter((url) => url.pathname === pathname).length,
-    fetch: (input) => {
+    fetch: (input, init) => {
       const url = new URL(input);
+      const sent = init?.headers ?? {};
       requests.push(url);
+      headers.push(sent);
       try {
-        return Promise.resolve(answer(url));
+        return Promise.resolve(answer(url, sent));
       } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }

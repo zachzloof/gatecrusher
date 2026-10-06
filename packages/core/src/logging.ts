@@ -1,4 +1,12 @@
-const SENSITIVE_KEYS = ["password", "cookie", "authorization", "token", "apiKey"] as const;
+const SENSITIVE_KEYS = [
+  "password",
+  "cookie",
+  "authorization",
+  "token",
+  "oauthToken",
+  "oauth_token",
+  "apiKey",
+] as const;
 
 /**
  * pino `redact.paths` shared by every process: each sensitive key at the top level

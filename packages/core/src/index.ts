@@ -9,4 +9,5 @@ export * from "./ingest.ts";
 export * from "./job-status.ts";
 export * from "./logging.ts";
 export * from "./queue.ts";
+export * from "./soundcloud-token.ts";
 export * from "./soundcloud-url.ts";

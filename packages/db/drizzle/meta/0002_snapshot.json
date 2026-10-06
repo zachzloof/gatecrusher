@@ -1,0 +1,1202 @@
+{
+  "id": "e60a0520-9456-4eee-b144-ed581764ecff",
+  "prevId": "52b1794c-660a-410d-bfed-d5839e8ff4d3",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.downloads": {
+      "name": "downloads",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "file_path": {
+          "name": "file_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "download_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "checksum_sha256": {
+          "name": "checksum_sha256",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "downloads_track_key": {
+          "name": "downloads_track_key",
+          "columns": [
+            {
+              "expression": "track_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "downloads_track_id_tracks_id_fk": {
+          "name": "downloads_track_id_tracks_id_fk",
+          "tableFrom": "downloads",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "downloads_job_id_jobs_id_fk": {
+          "name": "downloads_job_id_jobs_id_fk",
+          "tableFrom": "downloads",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.events": {
+      "name": "events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "events_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_index": {
+          "name": "step_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_name": {
+          "name": "step_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "screenshot_path": {
+          "name": "screenshot_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "events_run_id_idx": {
+          "name": "events_run_id_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "events_job_id_idx": {
+          "name": "events_job_id_idx",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "events_run_id_runs_id_fk": {
+          "name": "events_run_id_runs_id_fk",
+          "tableFrom": "events",
+          "tableTo": "runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "events_job_id_jobs_id_fk": {
+          "name": "events_job_id_jobs_id_fk",
+          "tableFrom": "events",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.human_requests": {
+      "name": "human_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason": {
+          "name": "reason",
+          "type": "human_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "screenshot_path": {
+          "name": "screenshot_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_url": {
+          "name": "page_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "adapter_id": {
+          "name": "adapter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_index": {
+          "name": "step_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "step_name": {
+          "name": "step_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "human_request_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "session_alive": {
+          "name": "session_alive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "give_up_reason": {
+          "name": "give_up_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "human_requests_job_idx": {
+          "name": "human_requests_job_idx",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "human_requests_status_idx": {
+          "name": "human_requests_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "human_requests_one_open_per_job_key": {
+          "name": "human_requests_one_open_per_job_key",
+          "columns": [
+            {
+              "expression": "job_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"human_requests\".\"status\" = 'OPEN'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "human_requests_job_id_jobs_id_fk": {
+          "name": "human_requests_job_id_jobs_id_fk",
+          "tableFrom": "human_requests",
+          "tableTo": "jobs",
+          "columnsFrom": [
+            "job_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.jobs": {
+      "name": "jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "track_id": {
+          "name": "track_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "job_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'QUEUED'"
+        },
+        "adapter_id": {
+          "name": "adapter_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "step_index": {
+          "name": "step_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "state": {
+          "name": "state",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "manual_reason": {
+          "name": "manual_reason",
+          "type": "manual_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manual_detail": {
+          "name": "manual_detail",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "manual_link": {
+          "name": "manual_link",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "jobs_run_track_key": {
+          "name": "jobs_run_track_key",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "track_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_status_idx": {
+          "name": "jobs_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "jobs_track_idx": {
+          "name": "jobs_track_idx",
+          "columns": [
+            {
+              "expression": "track_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "jobs_run_id_runs_id_fk": {
+          "name": "jobs_run_id_runs_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "jobs_track_id_tracks_id_fk": {
+          "name": "jobs_track_id_tracks_id_fk",
+          "tableFrom": "jobs",
+          "tableTo": "tracks",
+          "columnsFrom": [
+            "track_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "jobs_manual_has_reason_and_link": {
+          "name": "jobs_manual_has_reason_and_link",
+          "value": "\"jobs\".\"status\" <> 'MANUAL' OR (\"jobs\".\"manual_reason\" IS NOT NULL AND \"jobs\".\"manual_link\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.playlists": {
+      "name": "playlists",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "soundcloud_url": {
+          "name": "soundcloud_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "soundcloud_id": {
+          "name": "soundcloud_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "artwork_url": {
+          "name": "artwork_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ingest_source": {
+          "name": "ingest_source",
+          "type": "ingest_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_ingested_at": {
+          "name": "last_ingested_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "playlists_soundcloud_url_key": {
+          "name": "playlists_soundcloud_url_key",
+          "columns": [
+            {
+              "expression": "soundcloud_url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.runs": {
+      "name": "runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "run_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'RUNNING'"
+        },
+        "total_jobs": {
+          "name": "total_jobs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "succeeded_count": {
+          "name": "succeeded_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "manual_count": {
+          "name": "manual_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failed_count": {
+          "name": "failed_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "finished_at": {
+          "name": "finished_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "runs_playlist_idx": {
+          "name": "runs_playlist_idx",
+          "columns": [
+            {
+              "expression": "playlist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "runs_status_idx": {
+          "name": "runs_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "runs_playlist_id_playlists_id_fk": {
+          "name": "runs_playlist_id_playlists_id_fk",
+          "tableFrom": "runs",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.soundcloud_account": {
+      "name": "soundcloud_account",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "default": 1
+        },
+        "oauth_token": {
+          "name": "oauth_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "soundcloud_user_id": {
+          "name": "soundcloud_user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "verified_at": {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "soundcloud_account_single_row": {
+          "name": "soundcloud_account_single_row",
+          "value": "\"soundcloud_account\".\"id\" = 1"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.tracks": {
+      "name": "tracks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "playlist_id": {
+          "name": "playlist_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "soundcloud_id": {
+          "name": "soundcloud_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artist": {
+          "name": "artist",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "permalink_url": {
+          "name": "permalink_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "artwork_url": {
+          "name": "artwork_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchase_url": {
+          "name": "purchase_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchase_title": {
+          "name": "purchase_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "downloadable": {
+          "name": "downloadable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "classification": {
+          "name": "classification",
+          "type": "track_classification",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "gate_platform": {
+          "name": "gate_platform",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "tracks_playlist_soundcloud_id_key": {
+          "name": "tracks_playlist_soundcloud_id_key",
+          "columns": [
+            {
+              "expression": "playlist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "soundcloud_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_playlist_position_idx": {
+          "name": "tracks_playlist_position_idx",
+          "columns": [
+            {
+              "expression": "playlist_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tracks_classification_idx": {
+          "name": "tracks_classification_idx",
+          "columns": [
+            {
+              "expression": "classification",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "tracks_playlist_id_playlists_id_fk": {
+          "name": "tracks_playlist_id_playlists_id_fk",
+          "tableFrom": "tracks",
+          "tableTo": "playlists",
+          "columnsFrom": [
+            "playlist_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.download_kind": {
+      "name": "download_kind",
+      "schema": "public",
+      "values": [
+        "audio",
+        "archive"
+      ]
+    },
+    "public.human_reason": {
+      "name": "human_reason",
+      "schema": "public",
+      "values": [
+        "captcha",
+        "email_confirmation",
+        "login_challenge",
+        "unexpected_page",
+        "agent_request"
+      ]
+    },
+    "public.human_request_status": {
+      "name": "human_request_status",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "CONTINUED",
+        "GAVE_UP",
+        "SUPERSEDED"
+      ]
+    },
+    "public.ingest_source": {
+      "name": "ingest_source",
+      "schema": "public",
+      "values": [
+        "api_v2",
+        "yt_dlp"
+      ]
+    },
+    "public.job_status": {
+      "name": "job_status",
+      "schema": "public",
+      "values": [
+        "QUEUED",
+        "RUNNING",
+        "WAITING_FOR_HUMAN",
+        "SUCCEEDED",
+        "MANUAL",
+        "FAILED"
+      ]
+    },
+    "public.manual_reason": {
+      "name": "manual_reason",
+      "schema": "public",
+      "values": [
+        "dead_link",
+        "file_gone",
+        "account_required",
+        "user_gave_up"
+      ]
+    },
+    "public.run_status": {
+      "name": "run_status",
+      "schema": "public",
+      "values": [
+        "RUNNING",
+        "FINISHED"
+      ]
+    },
+    "public.track_classification": {
+      "name": "track_classification",
+      "schema": "public",
+      "values": [
+        "native",
+        "gate",
+        "buy",
+        "none"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
