@@ -3,6 +3,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { TrackClassification } from "@gatecrusher/core";
 import { savePlaylistIngest, schema, type Database } from "@gatecrusher/db";
 import { createTestDatabase, type TestDatabase } from "@gatecrusher/db/testing";
 import { createNativeAdapter, createRegistry } from "@gatecrusher/gates";
@@ -35,7 +36,7 @@ export interface WorkerTestBed {
   /** The browser context, once a job has opened it. */
   context(): BrowserContext | undefined;
   violations(): readonly string[];
-  /** A playlist whose native tracks point at the named fixture pages, in order. */
+  /** A playlist whose tracks point at the named fixture pages, in order. */
   seedPlaylist(pages: readonly FixturePage[]): Promise<{ playlistId: string; trackIds: string[] }>;
   close(): Promise<void>;
 }
@@ -43,6 +44,8 @@ export interface WorkerTestBed {
 export interface FixturePage {
   name: string;
   query?: Readonly<Record<string, string>>;
+  /** Defaults to native. */
+  classification?: TrackClassification;
 }
 
 function fixtureRegistry() {
@@ -98,8 +101,8 @@ export async function createWorkerTestBed(): Promise<WorkerTestBed> {
           durationMs: 300_000,
           purchaseUrl: null,
           purchaseTitle: null,
-          downloadable: true,
-          classification: "native" as const,
+          downloadable: (page.classification ?? "native") === "native",
+          classification: page.classification ?? "native",
           gatePlatform: null,
         })),
       });

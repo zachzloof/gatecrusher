@@ -1,0 +1,1 @@
+ALTER TYPE "public"."manual_reason" ADD VALUE 'drm_protected' BEFORE 'user_gave_up';

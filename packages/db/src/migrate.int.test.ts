@@ -1,4 +1,4 @@
-import { JOB_STATUSES, TRACK_CLASSIFICATIONS } from "@gatecrusher/core";
+import { JOB_STATUSES, MANUAL_REASONS, TRACK_CLASSIFICATIONS } from "@gatecrusher/core";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DbHandle } from "./client.ts";
@@ -53,6 +53,7 @@ describe("migrations", () => {
       "jobs",
       "playlists",
       "runs",
+      "soundcloud_account",
       "tracks",
     ]);
   });
@@ -61,10 +62,11 @@ describe("migrations", () => {
     await expect(runMigrations(databaseUrl)).resolves.toBeUndefined();
   });
 
-  it("create the classification and job status enums from core", async () => {
+  it("create the classification, job status and manual reason enums from core", async () => {
     expect(await enumLabels("track_classification")).toEqual([...TRACK_CLASSIFICATIONS]);
     expect(await enumLabels("job_status")).toEqual([...JOB_STATUSES]);
     expect(await enumLabels("job_status")).toContain("WAITING_FOR_HUMAN");
+    expect(await enumLabels("manual_reason")).toEqual([...MANUAL_REASONS]);
   });
 });
 

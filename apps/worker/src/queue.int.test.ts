@@ -6,7 +6,7 @@ import {
   workerEnvSchema,
   type TrackJobPayload,
 } from "@gatecrusher/core";
-import { schema, startNativeRun } from "@gatecrusher/db";
+import { schema, startPlaylistRun } from "@gatecrusher/db";
 import { Queue, QueueEvents } from "bullmq";
 import { asc, eq } from "drizzle-orm";
 import { Redis } from "ioredis";
@@ -84,7 +84,7 @@ describe("worker: track jobs from the queue", () => {
       { name: "track" },
       { name: "removed" },
     ]);
-    const run = await startNativeRun(bed.db, playlistId);
+    const run = await startPlaylistRun(bed.db, playlistId);
     if (!run.ok || run.runId === null) throw new Error("expected a run");
 
     const queued = await queue.addBulk(

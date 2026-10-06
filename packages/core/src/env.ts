@@ -140,7 +140,7 @@ export const ENV_VAR_DOCS: readonly EnvVarDoc[] = [
     usedBy: ["web", "worker"],
     required: false,
     description:
-      "yt-dlp executable: the worker downloads native tracks with it, web uses it for playlist metadata when SoundCloud's API fails. Defaults to yt-dlp on PATH.",
+      "yt-dlp executable: the worker downloads tracks with it, web uses it for playlist metadata when SoundCloud's API fails. Defaults to yt-dlp on PATH.",
   },
   {
     name: "NATIVE_DOWNLOAD_MODE",

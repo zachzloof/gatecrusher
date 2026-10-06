@@ -1,14 +1,18 @@
-// One native download without a browser: yt-dlp fetches the uploader's own file.
+// One track downloaded without a browser, by yt-dlp.
 //
-// Only the `download` format is ever asked for — the file the uploader enabled for
-// download on SoundCloud. There is no fallback to a stream: a track whose uploader did
-// not enable download is never fetched here (see docs/PIVOT.md).
+// A native track gets the uploader's own file (the `download` format) and nothing else.
+// Every other track gets the uploader's file if there is one, else the best stream the
+// signed-in account can play (256k AAC with Go+), with tags and artwork embedded. Both
+// land in the playlist's download folder. A stream SoundCloud only serves DRM-protected
+// is never circumvented: the track is marked manual. Every run carries the owner's
+// connected login.
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { playlistSlug, type TrackJobResult } from "@gatecrusher/core";
+import { playlistSlug, type TrackClassification, type TrackJobResult } from "@gatecrusher/core";
 import {
   completeJob,
   getJobContext,
+  getSoundcloudOauthToken,
   markJobFailed,
   markJobManual,
   recordStepFinished,
@@ -19,10 +23,15 @@ import {
 } from "@gatecrusher/db";
 import { createFileStore, type FileStore } from "@gatecrusher/gates";
 import type { Logger } from "pino";
+import { writeSoundcloudCookieFile } from "./cookie-file.ts";
 import type { ProcessRunner } from "./process-runner.ts";
 
 export const YTDLP_ADAPTER_ID = "yt-dlp";
 export const YTDLP_STEP_NAME = "yt-dlp-download";
+export const YTDLP_STREAM_STEP_NAME = "yt-dlp-stream";
+
+/** What a track is fetched as: the uploader's file only, or that file else the best stream. */
+export type YtDlpSource = "download" | "stream";
 
 /** Big uploads over a slow line; yt-dlp itself retries transient errors. */
 const DEFAULT_TIMEOUT_MS = 15 * 60 * 1_000;
@@ -54,6 +63,14 @@ export type YtDlpFailure =
   /** The uploader's download is not offered (any more). */
   | { kind: "download_not_offered" }
   | { kind: "track_gone" }
+  /** SoundCloud only serves the track encrypted. */
+  | { kind: "drm_protected" }
+  /** Embedding tags and artwork needs ffmpeg. */
+  | { kind: "ffmpeg_missing" }
+  /** SoundCloud did not accept the stored login token (expired, or signed out). */
+  | { kind: "login_rejected" }
+  /** SoundCloud answered as if nobody was signed in. */
+  | { kind: "login_required" }
   /** 403 / 429: SoundCloud is refusing this client for now. */
   | { kind: "rate_limited" }
   | { kind: "other"; detail: string };
@@ -64,25 +81,64 @@ export function classifyYtDlpFailure(failure: {
 }): YtDlpFailure {
   if (failure.kind !== "failed") return { kind: failure.kind };
   const { detail } = failure;
-  if (/requested format is not available/i.test(detail)) return { kind: "download_not_offered" };
-  if (/HTTP Error 4(03|29)|too many requests|rate.?limit/i.test(detail)) {
+  // The login problems only show as warnings, printed before the final error. Without
+  // them a missing login would read as "requested format is not available": file gone.
+  if (/authorization token is invalid/i.test(detail)) return { kind: "login_rejected" };
+  if (/only available for registered users/i.test(detail)) return { kind: "login_required" };
+  // The verdict is the ERROR line; warnings above it may mention unrelated HTTP errors,
+  // or that ffmpeg is missing when nothing needed it.
+  const errors = detail
+    .split(/\r?\n/)
+    .filter((line) => line.trimStart().startsWith("ERROR:"))
+    .join("\n");
+  const verdict = errors === "" ? detail : errors;
+  // Before the "not found" check below, which this wording would also match.
+  if (/ffmpeg not found|ffmpeg-location/i.test(verdict)) return { kind: "ffmpeg_missing" };
+  if (/DRM protected/i.test(verdict)) return { kind: "drm_protected" };
+  if (/requested format is not available/i.test(verdict)) return { kind: "download_not_offered" };
+  if (/HTTP Error 4(03|29)|too many requests|rate.?limit/i.test(verdict)) {
     return { kind: "rate_limited" };
   }
-  if (/HTTP Error 404|not found|has been removed|private/i.test(detail)) {
+  if (/HTTP Error 404|not found|has been removed|private/i.test(verdict)) {
     return { kind: "track_gone" };
   }
-  return { kind: "other", detail: detail.slice(0, 500) };
+  return { kind: "other", detail: verdict.slice(0, 500) };
 }
 
-/** The exact command line. `--` ends the options, so the URL can never be read as one. */
-export function ytDlpArgs(outputTemplate: string, trackUrl: string): string[] {
+const RECONNECT = "Connect SoundCloud again in Settings, then click Download tracks.";
+
+export const NOT_CONNECTED_MESSAGE =
+  "No SoundCloud account is connected, and SoundCloud only hands an uploader's file or its best stream to a signed-in account. Connect one in Settings, then click Download tracks.";
+
+const FORMAT_OPTIONS: Record<YtDlpSource, readonly string[]> = {
+  // The uploader's original file and nothing else.
+  download: ["--format", "download"],
+  // The uploader's file when there is one, else the best stream, tagged with its artwork.
+  stream: ["--format", "download/bestaudio", "--embed-metadata", "--embed-thumbnail"],
+};
+
+/** Native tracks get the uploader's file only; every other track falls back to the stream. */
+export function sourceFor(classification: TrackClassification): YtDlpSource {
+  return classification === "native" ? "download" : "stream";
+}
+
+/**
+ * The exact command line. `--` ends the options, so the URL can never be read as one.
+ * The login comes from a cookie file, never from an argument other processes can read.
+ * Warnings stay on: the login problems are reported only as warnings.
+ */
+export function ytDlpArgs(
+  outputTemplate: string,
+  trackUrl: string,
+  cookieFile: string,
+  source: YtDlpSource,
+): string[] {
   return [
     "--no-playlist",
-    "--no-warnings",
     "--no-progress",
-    // The uploader's original file and nothing else: no stream is ever ripped.
-    "--format",
-    "download",
+    "--cookies",
+    cookieFile,
+    ...FORMAT_OPTIONS[source],
     "--no-overwrites",
     "--socket-timeout",
     "30",
@@ -97,10 +153,15 @@ export function ytDlpArgs(outputTemplate: string, trackUrl: string): string[] {
   ];
 }
 
+/** What yt-dlp can leave beside the audio: the artwork it embeds, unfinished parts. */
+const SIDE_FILE = /\.(jpe?g|png|webp|part|ytdl)$/i;
+
 /** yt-dlp wrote the file under the partial name plus its own extension. */
 async function findPartialFile(store: FileStore, partial: string): Promise<string | null> {
   const prefix = path.basename(partial);
-  const names = (await readdir(store.directory)).filter((name) => name.startsWith(prefix));
+  const names = (await readdir(store.directory)).filter(
+    (name) => name.startsWith(prefix) && !SIDE_FILE.test(name),
+  );
   const [name] = names;
   return name === undefined ? null : path.join(store.directory, name);
 }
@@ -123,7 +184,11 @@ function errorMessage(error: unknown): string {
  */
 export async function processYtDlpJob(jobId: string, deps: YtDlpJobDeps): Promise<TrackOutcome> {
   const found = await getJobContext(deps.db, jobId);
-  if (found === null) throw new Error(`Track job ${jobId} does not exist`);
+  if (found === null) {
+    // Its playlist was deleted after the job was queued.
+    deps.log.info({ jobId }, "Job no longer exists, skipping");
+    return { result: { jobId, outcome: "skipped" } };
+  }
   const { job, track, playlist } = found;
   const log = deps.log.child({
     jobId,
@@ -148,8 +213,13 @@ export async function processYtDlpJob(jobId: string, deps: YtDlpJobDeps): Promis
   }
   if (started.recovered) log.warn("Job was interrupted by a worker restart; running it again");
 
+  const source = sourceFor(track.classification);
   const ids = { jobId, runId: job.runId };
-  const step = { ...ids, stepIndex: 0, stepName: YTDLP_STEP_NAME };
+  const step = {
+    ...ids,
+    stepIndex: 0,
+    stepName: source === "download" ? YTDLP_STEP_NAME : YTDLP_STREAM_STEP_NAME,
+  };
   const finish = (outcome: "done" | "impossible" | "needs_human") =>
     recordStepFinished(deps.db, { ...step, outcome, screenshotPath: null, checkpoint: null });
 
@@ -163,20 +233,23 @@ export async function processYtDlpJob(jobId: string, deps: YtDlpJobDeps): Promis
     },
   });
   const partial = store.partialPath();
+  let cookieFile: string | null = null;
 
   try {
-    if (track.classification !== "native") {
-      throw new Error(
-        `Only native tracks are downloaded with yt-dlp (track is ${track.classification})`,
-      );
+    const oauthToken = await getSoundcloudOauthToken(deps.db);
+    if (oauthToken === null) {
+      log.warn("No SoundCloud account is connected");
+      return await settleFailed(NOT_CONNECTED_MESSAGE);
     }
+
     await mkdir(store.directory, { recursive: true });
     await recordStepStarted(deps.db, step);
-    log.info({ step: YTDLP_STEP_NAME }, "Step started");
+    log.info({ step: step.stepName, source }, "Step started");
 
+    cookieFile = await writeSoundcloudCookieFile(deps.dataDir, jobId, oauthToken);
     const run = await deps.runner.run(
       deps.command,
-      ytDlpArgs(`${partial}.%(ext)s`, track.permalinkUrl),
+      ytDlpArgs(`${partial}.%(ext)s`, track.permalinkUrl, cookieFile, source),
       { timeoutMs: deps.timeoutMs ?? DEFAULT_TIMEOUT_MS },
     );
 
@@ -188,12 +261,31 @@ export async function processYtDlpJob(jobId: string, deps: YtDlpJobDeps): Promis
         case "download_not_offered":
           return await settleManual(
             "file_gone",
-            "SoundCloud no longer offers the uploader's download for this track: it was turned off or its download limit was reached.",
+            source === "download"
+              ? "SoundCloud no longer offers the uploader's download for this track: it was turned off or its download limit was reached."
+              : "SoundCloud offers neither a download nor a playable stream for this track.",
+          );
+        case "drm_protected":
+          return await settleManual(
+            "drm_protected",
+            "SoundCloud only streams this track DRM-protected and offers no download. Buy it or get it from the artist.",
+          );
+        case "ffmpeg_missing":
+          return await settleFailed(
+            "yt-dlp needs ffmpeg to embed the tags and artwork. Install it (winget install Gyan.FFmpeg), restart the worker, then click Download tracks.",
           );
         case "track_gone":
           return await settleManual(
             "dead_link",
             "SoundCloud has no track at this link any more: it was removed or made private.",
+          );
+        case "login_rejected":
+          return await settleFailed(
+            `SoundCloud did not accept the saved login: it expired, or the account was signed out of SoundCloud. ${RECONNECT}`,
+          );
+        case "login_required":
+          return await settleFailed(
+            `SoundCloud treated the download as not signed in, and only hands this file to a signed-in account. ${RECONNECT}`,
           );
         case "rate_limited":
           return {
@@ -239,11 +331,18 @@ export async function processYtDlpJob(jobId: string, deps: YtDlpJobDeps): Promis
       log.error({ kind: failed.kind, reason: failed.reason }, "Could not record the failure");
     return { result: { jobId, outcome: "failed" } };
   } finally {
+    if (cookieFile !== null) {
+      // Logged, not thrown: the run's counters below must still be refreshed. Stale
+      // files are also removed when the worker starts.
+      await rm(cookieFile, { force: true }).catch((error: unknown) =>
+        log.error({ err: error }, "Could not delete the login cookie file"),
+      );
+    }
     await refreshRun(deps.db, job.runId);
   }
 
   async function settleManual(
-    reason: "file_gone" | "dead_link",
+    reason: "file_gone" | "dead_link" | "drm_protected",
     detail: string,
   ): Promise<TrackOutcome> {
     await finish("impossible");

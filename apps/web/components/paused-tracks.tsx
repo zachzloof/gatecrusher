@@ -30,8 +30,8 @@ export function PausedTracks({ tracks }: { tracks: readonly TrackDto[] }) {
     <section aria-labelledby="paused-heading" className="mb-4">
       <SectionLabel id="paused-heading">Paused</SectionLabel>
       <p className="mb-2 max-w-prose text-13 text-text-muted">
-        Do what each track asks in the worker&apos;s browser window, then click Download native
-        tracks again to retry.
+        Do what each track asks in the worker&apos;s browser window, then click Download tracks
+        again to retry.
       </p>
       <ul className="divide-y divide-border rounded-panel border border-border bg-surface-1">
         {paused.map(({ track, needsHuman, stepName }) => (

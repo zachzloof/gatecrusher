@@ -25,6 +25,15 @@ export function fakeWav(sizeBytes = BIG_ENOUGH_BYTES): Buffer {
   return padded(header, sizeBytes);
 }
 
+/** An MP4 `ftyp` box with the M4A brand: what SoundCloud's AAC stream arrives as. */
+export function fakeM4a(sizeBytes = BIG_ENOUGH_BYTES): Buffer {
+  const ftyp = Buffer.alloc(20);
+  ftyp.writeUInt32BE(20, 0);
+  ftyp.write("ftypM4A ", 4, "ascii");
+  ftyp.write("isom", 16, "ascii");
+  return padded(ftyp, sizeBytes);
+}
+
 /** What a gate serves when the file is gone: an error page, whatever its file name says. */
 export function fakeHtmlPage(sizeBytes = BIG_ENOUGH_BYTES): Buffer {
   const html = "<!DOCTYPE html><html><body><h1>File not found</h1></body></html>";

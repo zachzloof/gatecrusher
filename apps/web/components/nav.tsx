@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Activity,
-  ChartColumn,
-  Hand,
-  ListMusic,
-  Settings,
-  ShoppingBag,
-  type LucideIcon,
-} from "lucide-react";
+import { ChartColumn, Hand, ListMusic, Settings, ShoppingBag, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -21,7 +13,6 @@ interface NavItem {
 
 const NAV_ITEMS: readonly NavItem[] = [
   { href: "/playlists", label: "Playlists", icon: ListMusic },
-  { href: "/runs", label: "Runs", icon: Activity },
   { href: "/buy-list", label: "Buy list", icon: ShoppingBag },
   { href: "/manual-list", label: "Manual list", icon: Hand },
   { href: "/evals", label: "Evals", icon: ChartColumn },

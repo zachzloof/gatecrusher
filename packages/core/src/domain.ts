@@ -26,6 +26,8 @@ export const MANUAL_REASONS = [
   "dead_link",
   "file_gone",
   "account_required",
+  /** SoundCloud only streams the track DRM-protected; it is never circumvented. */
+  "drm_protected",
   "user_gave_up",
 ] as const;
 export const manualReasonSchema = z.enum(MANUAL_REASONS);

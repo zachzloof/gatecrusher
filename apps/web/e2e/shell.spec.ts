@@ -4,7 +4,6 @@ import { fakeApi } from "./fixtures";
 
 const PAGES = [
   { link: "Playlists", path: "/playlists", heading: "Playlists", empty: /No playlists yet/ },
-  { link: "Runs", path: "/runs", heading: "Runs", empty: /No runs yet/ },
   { link: "Buy list", path: "/buy-list", heading: "Buy list", empty: /No tracks to buy yet/ },
   {
     link: "Manual list",
@@ -57,13 +56,6 @@ test("no page scrolls horizontally", async ({ page }) => {
     );
     expect(overflow, `${target.path} overflows horizontally`).toBeLessThanOrEqual(0);
   }
-});
-
-test("the runs page has a Needs-you section", async ({ page }) => {
-  await page.goto("/runs");
-
-  await expect(page.getByRole("heading", { level: 2, name: "Needs you" })).toBeVisible();
-  await expect(page.getByText(/Nothing is waiting on you/)).toBeVisible();
 });
 
 test("a banner says so when a service is down, and the shell stays usable", async ({ page }) => {
