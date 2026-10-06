@@ -7,6 +7,10 @@
 > for the owner to do by hand. **Do not launch a browser or make requests against
 > SoundCloud or gate sites from this machine while working on the code.** Points 2–4
 > below describe the original plan, not what runs today. See [docs/PIVOT.md](docs/PIVOT.md).
+>
+> **2026-10-06:** SoundCloud only hands the uploader's file to a signed-in account, so
+> yt-dlp now runs with a login token the owner pastes on the **Connect SoundCloud**
+> page (`/connect`). See hard rule 5.
 
 Personal-use web app (single user, built to professional standards). It takes a SoundCloud playlist URL and:
 
@@ -33,7 +37,12 @@ These are not negotiable. If a task seems to require breaking one, stop and ask.
    The browser page stays open on that page the whole time.
 3. **Manual means genuinely impossible.** Only mark a track `MANUAL` for: dead link, file gone, requires an account we don't have, or the user clicked Give up. Always store a reason and the link.
 4. **Never auto-purchase anything.** Buy links go to the buy list. Never click a pay/checkout/add-to-cart control.
-5. **Only the dedicated burner SoundCloud account.** Never log, print, screenshot-on-purpose, or persist credentials outside the browser profile. Login is done once, interactively, by the human.
+5. **SoundCloud login is a token the owner pastes in; never a password.** (Changed by the owner on 2026-10-06 for local use; it used to say credentials live only in the browser profile.) The owner signs in on soundcloud.com in their own browser, copies the `oauth_token` cookie, and pastes it on `/connect`. A burner account is recommended. The token:
+   - is stored only in the local Postgres (`soundcloud_account`, one row), after SoundCloud has accepted it;
+   - reaches yt-dlp only through a temporary cookie file in `DATA_DIR/tmp`, deleted when the job ends; never on a command line;
+   - is never logged, printed, returned by an API, shown in the UI, or put in an error message.
+
+   Never ask for, store or automate a SoundCloud password or sign-in. The paused browser mode keeps its own interactive login in the browser profile.
 6. **Behave like a slow human.** Concurrency 1 for browser jobs, randomised delays between actions, real persistent browser profile, **no headless mode** in the worker. (Headless is fine for Playwright *tests* against local fixtures and the UI.)
 
 ## Stack (decided — ask before adding anything outside it)

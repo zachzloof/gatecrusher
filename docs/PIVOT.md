@@ -1,7 +1,7 @@
 # Project notes
 
 Where Gatecrusher stands, what is paused and why, and the plan from here. Updated
-2026-10-05. The slice plan the first three slices were built against is in
+2026-10-06. The slice plan the first three slices were built against is in
 [SLICES.md](SLICES.md); it is kept as a record, not as the current plan.
 
 ## What has been done
@@ -68,6 +68,42 @@ Get the most out of what SoundCloud allows, without a browser:
    files as one stored zip (zip64 when needed); a button on the playlist page.
 3. **Buy list stays**; the **Manual list** page now lists gate tracks with their links
    (CSV export) for the owner to complete by hand.
+
+## SoundCloud login for downloads (2026-10-06)
+
+**What happened.** The first real yt-dlp run marked all six native tracks of a playlist
+**Manual · file gone**. The tracks had not changed: SoundCloud only hands the uploader's
+original file to a signed-in account. Asked without a login, its download endpoint
+answers 401, yt-dlp prints a warning ("Original download format is only available for
+registered users") and then fails with "Requested format is not available". The worker
+ran yt-dlp with `--no-warnings`, so it only saw the last line and read it as "file gone".
+
+**Decision (owner).** Downloads run as a SoundCloud account the owner connects, with the
+login stored in the local database. The app is for local use only for now. A password
+cannot work: yt-dlp does not sign in to SoundCloud with one, and automating SoundCloud's
+sign-in page would run into the anti-bot check again (hard rule 1). So the login is the
+`oauth_token` cookie, copied from the owner's own signed-in browser.
+
+**What was built.**
+
+- **Connect SoundCloud** page (`/connect`): a step-by-step guide to copying `oauth_token`
+  (Chrome/Edge/Brave, Firefox, Safari, troubleshooting), then a paste box. The token is
+  checked against api-v2 `/me` before anything is stored; the page shows "Connected as
+  …". Opening the app (`/`) lands here until an account is connected; **Skip for now**
+  goes to the playlists.
+- `soundcloud_account` table (one row) and `/api/soundcloud-account` (GET / PUT /
+  DELETE). No response ever carries the token. **Settings** shows the account, with
+  **Replace token** and **Disconnect**.
+- **Download native tracks** refuses to queue anything (409) until an account is
+  connected, and links to the connect page.
+- The worker writes the token to a cookie file in `DATA_DIR/tmp` for each yt-dlp run and
+  deletes it afterwards (stale ones are removed at start-up). yt-dlp's warnings are kept,
+  so an expired or missing login is a retryable **Failed** ("Connect SoundCloud again in
+  Settings") instead of **Manual · file gone**.
+- Hard rule 5 in CLAUDE.md was rewritten to match.
+
+The token stops working when that browser signs out of SoundCloud; reconnecting is the
+same paste.
 
 ## Later
 

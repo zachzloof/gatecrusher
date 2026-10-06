@@ -79,7 +79,23 @@ Open http://127.0.0.1:3000. The banner at the top disappears once the worker's
 heartbeat arrives (a few seconds). If it says Postgres or Redis is down, go back to
 step 4.
 
-## 7. First playlist
+## 7. Connect SoundCloud
+
+The first time, the app opens on **Connect SoundCloud**. SoundCloud only hands an
+uploader's file to a signed-in account, so downloads run as an account you connect here.
+Use a burner account rather than your main one.
+
+The page walks you through it: sign in on soundcloud.com in your normal browser, open the
+developer tools (F12), find the `oauth_token` cookie under soundcloud.com, copy its value
+and paste it into the box. Gatecrusher checks it with SoundCloud, then shows
+"Connected as …". It never asks for your password. **Skip for now** is fine for adding
+playlists; downloading asks for the account first.
+
+The token is stored in the local database only. **Settings → SoundCloud account** shows
+who is connected, with **Replace token** and **Disconnect**. Signing out of SoundCloud in
+that browser ends the token; connect again with a fresh one.
+
+## 8. First playlist
 
 1. **Playlists → Add playlist**, paste a URL like `https://soundcloud.com/artist/sets/name`.
    Every track is classified: **Native** (the uploader enabled SoundCloud's download),
@@ -94,7 +110,7 @@ step 4.
 Don't run step 2 while SoundCloud is showing your network an "unusual activity"
 warning in an ordinary browser; wait for that to clear first.
 
-## 8. Day to day
+## 9. Day to day
 
 | Want to | Run |
 | --- | --- |
@@ -115,6 +131,13 @@ warning in an ordinary browser; wait for that to clear first.
   set `YT_DLP_PATH`.
 - **A track fails with "rate limited or blocked"** — SoundCloud answered 403/429. The
   worker pauses for ten minutes on its own. Stop and wait longer before clicking again.
+- **A track fails with "Connect SoundCloud again in Settings"** — the saved token
+  expired or that browser signed out of SoundCloud. Copy a fresh `oauth_token` (step 7),
+  paste it under **Settings → SoundCloud account → Replace token**, then click
+  **Download native tracks** again.
+- **Every native track went to Manual · file gone** — that was the symptom before the
+  SoundCloud login existed. Connect an account, then click **Download native tracks**:
+  tracks marked Manual are tried again.
 - **`pnpm --filter @gatecrusher/worker login` shows an npm QR code** — that's pnpm's own
   `login` command, not ours. The script is `run login`, and it belongs to the paused
   browser mode; you don't need it.

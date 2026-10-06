@@ -20,6 +20,18 @@ pnpm db:migrate
 
 `.env` must not set `NATIVE_DOWNLOAD_MODE` (or set it to `yt-dlp`).
 
+### 1b. Connect SoundCloud
+
+1. Open http://127.0.0.1:3000. With no account connected it lands on **Connect
+   SoundCloud**, with the six-step guide above a paste box.
+2. Follow the guide with your burner account: copy the `oauth_token` cookie value, paste
+   it, click **Connect**. Expected: "Connected as <username>." and **Go to playlists**.
+3. Paste something that is not a token (e.g. `hello`). Expected: an inline message, and
+   nothing is sent.
+4. **Settings → SoundCloud account** shows "Connected as <username>". Nothing on any page
+   shows the token. `data/tmp/` holds no `soundcloud-cookies-*` file while the worker is
+   idle.
+
 ### 2. Run a real playlist
 
 Two terminals:
@@ -55,7 +67,13 @@ tracks: the worker log shows no yt-dlp run for them.
 ### 4. If a track ends up Manual or Failed
 
 - **Manual · file gone** — the uploader turned the download off since the playlist was
-  added. Correct; nothing to do.
+  added. Correct; nothing to do. (If *every* native track does this, the worker is
+  running code from before the SoundCloud login: restart it.)
+- **Failed** with "Connect SoundCloud again in Settings" — the token expired or was
+  signed out. Paste a fresh one under **Settings → Replace token**, then click
+  **Download native tracks** again.
+- **Download native tracks** says "Connect a SoundCloud account first" — no account is
+  connected; the link goes to the connect page.
 - **Manual · dead link** — the track was removed or made private.
 - **Failed** with "rate limited or blocked" — SoundCloud answered 403/429. The worker
   pauses for ten minutes. Stop and wait longer before clicking again.

@@ -25,7 +25,7 @@ After building a slice and getting `pnpm lint && pnpm typecheck && pnpm test` gr
 - [ ] No path where a captcha, email confirmation, login challenge, or unexpected page ends in `FAILED` or `MANUAL` — they all become `needs_human`
 - [ ] `MANUAL` is only reachable via `dead_link`, `file_gone`, `account_required`, `user_gave_up`, and always stores reason + link
 - [ ] Nothing clicks purchase/checkout controls; buy links only ever go to the buy list
-- [ ] Only the burner account is used; credentials are never read into app code beyond the interactive login script
+- [ ] SoundCloud login is only the pasted `oauth_token` (hard rule 5): no password is asked for, stored or typed; the token leaves `soundcloud_account` only for yt-dlp's temporary cookie file (deleted after the job), and never reaches a log, an error message, an API response, the UI or a command line
 - [ ] Worker browser is headed, persistent profile, concurrency 1, all actions go through the randomised delay helper
 
 ### Types
