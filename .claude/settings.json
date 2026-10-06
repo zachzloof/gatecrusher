@@ -23,7 +23,17 @@
       "PowerShell(node --version)",
       "PowerShell(git status *)",
       "PowerShell(git diff *)",
-      "PowerShell(git log *)"
+      "PowerShell(git log *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git checkout -b *)",
+      "Bash(git switch -c *)",
+      "Bash(git branch *)",
+      "PowerShell(git commit *)",
+      "PowerShell(git push *)",
+      "PowerShell(git checkout -b *)",
+      "PowerShell(git switch -c *)",
+      "PowerShell(git branch *)"
     ],
     "ask": [
       "Bash(pnpm add *)",
@@ -40,16 +50,6 @@
       "PowerShell(docker compose rm *)"
     ],
     "deny": [
-      "Bash(git commit *)",
-      "Bash(git push *)",
-      "Bash(git checkout -b *)",
-      "Bash(git switch -c *)",
-      "Bash(git branch *)",
-      "PowerShell(git commit *)",
-      "PowerShell(git push *)",
-      "PowerShell(git checkout -b *)",
-      "PowerShell(git switch -c *)",
-      "PowerShell(git branch *)",
       "Read(./.env)",
       "Read(./.env.local)",
       "Read(./apps/*/.env)",
