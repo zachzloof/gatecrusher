@@ -1,7 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { jobEventSchema } from "@gatecrusher/core";
-import { schema, startJob, startNativeRun } from "@gatecrusher/db";
+import { schema, startJob, startPlaylistRun } from "@gatecrusher/db";
 import { asc, eq } from "drizzle-orm";
 import { pino } from "pino";
 import type { Page } from "playwright";
@@ -51,7 +51,7 @@ afterEach(() => {
 /** Seeds a playlist, clicks "Run native tracks", and returns the queued job ids in order. */
 async function queued(pages: readonly FixturePage[]) {
   const seededPlaylist = await bed.seedPlaylist(pages);
-  const run = await startNativeRun(bed.db, seededPlaylist.playlistId);
+  const run = await startPlaylistRun(bed.db, seededPlaylist.playlistId);
   if (!run.ok || run.runId === null) throw new Error("expected a run");
   return { ...seededPlaylist, runId: run.runId, jobIds: run.newJobIds };
 }
@@ -159,7 +159,7 @@ describe("processTrackJob: happy path", () => {
     expect(tabsOn("track")).toEqual([]);
 
     // Already verified: running the playlist again creates nothing.
-    const again = await startNativeRun(bed.db, playlistId);
+    const again = await startPlaylistRun(bed.db, playlistId);
     expect(again).toMatchObject({ ok: true, runId: null, newJobIds: [], alreadyDownloaded: 1 });
   });
 
@@ -263,7 +263,7 @@ describe("processTrackJob: blockers", () => {
     expect(run?.status).toBe("FINISHED");
 
     // 2. Retried while the captcha is still there: parked again, nothing touched.
-    await startNativeRun(bed.db, playlistId);
+    await startPlaylistRun(bed.db, playlistId);
     expect(await processTrackJob(jobId, deps)).toEqual({ jobId, outcome: "parked" });
     expect((await requestsOf(jobId)).map((row) => [row.attempt, row.status])).toEqual([
       [1, "CONTINUED"],
@@ -274,7 +274,7 @@ describe("processTrackJob: blockers", () => {
 
     // 3. The human solves it and clicks "Run native tracks" again.
     await tab.evaluate(() => (window as unknown as { __solveCaptcha(): void }).__solveCaptcha());
-    const retry = await startNativeRun(bed.db, playlistId);
+    const retry = await startPlaylistRun(bed.db, playlistId);
     expect(retry).toMatchObject({ ok: true, resumedJobIds: [jobId], newJobIds: [] });
     const eventsBefore = (await eventsOf(jobId)).length;
 
@@ -335,7 +335,7 @@ describe("processTrackJob: blockers", () => {
     for (const tab of tabsOn("signed-out")) await tab.close();
     const pageHits = bed.server.hits("/fixture-artist/signed-out");
 
-    await startNativeRun(bed.db, playlistId);
+    await startPlaylistRun(bed.db, playlistId);
     expect(await processTrackJob(jobId, deps)).toEqual({ jobId, outcome: "parked" });
 
     const lastStart = (await eventsOf(jobId))
@@ -419,9 +419,8 @@ describe("processTrackJob: manual and failed", () => {
     expect(run).toMatchObject({ status: "FINISHED", failedCount: 1 });
   });
 
-  it("rejects a job id that does not exist", async () => {
-    await expect(processTrackJob("00000000-0000-4000-8000-000000000000", deps)).rejects.toThrow(
-      "does not exist",
-    );
+  it("skips a job that no longer exists (its playlist was deleted)", async () => {
+    const jobId = "00000000-0000-4000-8000-000000000000";
+    expect(await processTrackJob(jobId, deps)).toEqual({ jobId, outcome: "skipped" });
   });
 });

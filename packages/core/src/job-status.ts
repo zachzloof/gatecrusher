@@ -7,6 +7,8 @@ export const JOB_STATUSES = [
   "SUCCEEDED",
   "MANUAL",
   "FAILED",
+  /** The owner cancelled it before it started. Downloading again queues a new job. */
+  "CANCELLED",
 ] as const;
 export const jobStatusSchema = z.enum(JOB_STATUSES);
 export type JobStatus = z.infer<typeof jobStatusSchema>;
@@ -21,6 +23,7 @@ export const JOB_TRANSITION_EVENTS = [
   "continue", // the human clicked Continue
   "give_up", // the human clicked Give up
   "retry", // the human clicked Retry on a failed job
+  "cancel", // the owner cancelled the playlist's queue before the job started
 ] as const;
 export const jobTransitionEventSchema = z.enum(JOB_TRANSITION_EVENTS);
 export type JobTransitionEvent = z.infer<typeof jobTransitionEventSchema>;
@@ -29,7 +32,7 @@ export type JobTransitionEvent = z.infer<typeof jobTransitionEventSchema>;
 const TRANSITIONS: Readonly<
   Record<JobStatus, Readonly<Partial<Record<JobTransitionEvent, JobStatus>>>>
 > = {
-  QUEUED: { start: "RUNNING" },
+  QUEUED: { start: "RUNNING", cancel: "CANCELLED" },
   RUNNING: {
     succeed: "SUCCEEDED",
     needs_human: "WAITING_FOR_HUMAN",
@@ -41,6 +44,7 @@ const TRANSITIONS: Readonly<
   FAILED: { retry: "QUEUED" },
   SUCCEEDED: {},
   MANUAL: {},
+  CANCELLED: {},
 };
 
 export type TransitionResult =

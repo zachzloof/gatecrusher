@@ -15,7 +15,13 @@ import {
 } from "@/components/ui/table";
 import type { TrackDto } from "@/lib/api-schemas";
 import { displayUrl, formatDuration, middleTruncate, safeHref } from "@/lib/format";
-import { statusDetail, statusExplanation, trackStatus } from "@/lib/track-status";
+import {
+  statusDetail,
+  statusExplanation,
+  statusReason,
+  trackStatus,
+  type StatusReason,
+} from "@/lib/track-status";
 import {
   CLASSIFICATION_FILTERS,
   countByClassification,
@@ -83,6 +89,28 @@ function RunStatus({ track, className }: { track: TrackDto; className?: string }
     <span title={statusExplanation(track)} className="flex min-w-0">
       <StatusBadge status={status} detail={statusDetail(track)} className={className} />
     </span>
+  );
+}
+
+const REASON_TONE: Record<StatusReason["tone"], string> = {
+  danger: "text-danger",
+  manual: "text-manual",
+  muted: "text-text-muted",
+};
+
+/** Why a track failed, is manual or was cancelled, in full: never only in a tooltip. */
+function Reason({ track }: { track: TrackDto }) {
+  const reason = statusReason(track);
+  if (reason === null) return null;
+  return (
+    <p
+      className={cn(
+        "mt-0.5 max-w-prose text-xs leading-4 break-words whitespace-normal",
+        REASON_TONE[reason.tone],
+      )}
+    >
+      {reason.text}
+    </p>
   );
 }
 
@@ -242,6 +270,7 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                       <span className="md:hidden">{` · ${formatDuration(track.durationMs)}`}</span>
                     </span>
                   </div>
+                  <Reason track={track} />
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
                   <StatusBadge status={track.classification} />

@@ -4,9 +4,10 @@ import type { DownloadKind, HumanReason, JobStatus, ManualReason } from "@gatecr
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "./client.ts";
 import { applyJobTransition, insertJobEvent } from "./job-transitions.ts";
+import { refreshRun } from "./jobs.ts";
 import { downloads, events, humanRequests, jobs, playlists, runs, tracks } from "./schema.ts";
 
-export type StartNativeRunResult =
+export type StartPlaylistRunResult =
   | {
       ok: true;
       /** The run created for tracks that needed a new job, or `null` when none did. */
@@ -17,15 +18,16 @@ export type StartNativeRunResult =
       resumedJobIds: string[];
       /** Jobs that were already queued. Handing them to the queue again is harmless. */
       queuedJobIds: string[];
-      /** Native tracks skipped because they already have a verified download. */
+      /** Tracks skipped because they already have a verified download. */
       alreadyDownloaded: number;
-      /** Native tracks whose job is running right now. */
+      /** Tracks whose job is running right now. */
       alreadyRunning: number;
     }
   | { ok: false; kind: "playlist_not_found"; reason: string };
 
 /**
- * Decides what "Run native tracks" does for each native track of a playlist:
+ * Decides what "Download tracks" does for each track of a playlist, whatever its
+ * classification (the worker picks how each one is fetched):
  *
  * - verified download            -> skipped
  * - job queued or running        -> left alone
@@ -34,10 +36,10 @@ export type StartNativeRunResult =
  *
  * One transaction, holding the playlist row, so two clicks cannot both create jobs.
  */
-export async function startNativeRun(
+export async function startPlaylistRun(
   db: Database,
   playlistId: string,
-): Promise<StartNativeRunResult> {
+): Promise<StartPlaylistRunResult> {
   return db.transaction(async (tx) => {
     const [playlist] = await tx
       .select({ id: playlists.id })
@@ -48,14 +50,14 @@ export async function startNativeRun(
       return { ok: false, kind: "playlist_not_found", reason: "No such playlist." };
     }
 
-    const native = await tx
+    const playlistTracks = await tx
       .select({ id: tracks.id })
       .from(tracks)
-      .where(and(eq(tracks.playlistId, playlistId), eq(tracks.classification, "native")))
+      .where(eq(tracks.playlistId, playlistId))
       .orderBy(asc(tracks.position), asc(tracks.id));
-    const trackIds = native.map((track) => track.id);
+    const trackIds = playlistTracks.map((track) => track.id);
 
-    const result: Extract<StartNativeRunResult, { ok: true }> = {
+    const result: Extract<StartPlaylistRunResult, { ok: true }> = {
       ok: true,
       runId: null,
       newJobIds: [],
@@ -125,6 +127,7 @@ export async function startNativeRun(
         case "SUCCEEDED":
         case "MANUAL":
         case "FAILED":
+        case "CANCELLED":
           needNewJob.push(trackId);
           break;
       }
@@ -153,6 +156,69 @@ export async function startNativeRun(
     }
     return result;
   });
+}
+
+export type CancelPlaylistRunResult =
+  | {
+      ok: true;
+      /** Queued jobs that were cancelled. */
+      cancelled: number;
+      /** Jobs already running: each finishes, and nothing starts after it. */
+      running: number;
+    }
+  | { ok: false; kind: "playlist_not_found"; reason: string };
+
+/**
+ * "Cancel": every queued job of the playlist becomes CANCELLED, so the worker skips it
+ * when the queue hands it over. A running job is left to finish. Holds the playlist row
+ * like `startPlaylistRun`, so a cancel and a start never interleave.
+ */
+export async function cancelPlaylistRun(
+  db: Database,
+  playlistId: string,
+): Promise<CancelPlaylistRunResult> {
+  const outcome = await db.transaction(async (tx) => {
+    const [playlist] = await tx
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(eq(playlists.id, playlistId))
+      .for("update");
+    if (playlist === undefined) {
+      return { ok: false, kind: "playlist_not_found", reason: "No such playlist." } as const;
+    }
+
+    const active = await tx
+      .select({ id: jobs.id, runId: jobs.runId, status: jobs.status })
+      .from(jobs)
+      .innerJoin(tracks, eq(jobs.trackId, tracks.id))
+      .where(and(eq(tracks.playlistId, playlistId), inArray(jobs.status, ["QUEUED", "RUNNING"])));
+
+    let cancelled = 0;
+    let running = 0;
+    const runIds = new Set<string>();
+    for (const job of active) {
+      // The transition re-reads the row under a lock: a job the worker started in the
+      // meantime is refused, and counted as running.
+      const changed = await applyJobTransition(tx, job.id, "cancel", { finishedAt: new Date() });
+      if (!changed.ok) {
+        running += 1;
+        continue;
+      }
+      await insertJobEvent(tx, {
+        type: "job_cancelled",
+        jobId: job.id,
+        runId: job.runId,
+        status: "CANCELLED",
+      });
+      cancelled += 1;
+      runIds.add(job.runId);
+    }
+    return { ok: true, cancelled, running, runIds: [...runIds] } as const;
+  });
+  if (!outcome.ok) return outcome;
+
+  for (const runId of outcome.runIds) await refreshRun(db, runId);
+  return { ok: true, cancelled: outcome.cancelled, running: outcome.running };
 }
 
 export interface TrackRunState {

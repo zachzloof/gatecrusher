@@ -6,11 +6,11 @@ import Link from "next/link";
 import { useEffect } from "react";
 import { ErrorState, RowsSkeleton } from "@/components/data-states";
 import { PausedTracks } from "@/components/paused-tracks";
-import { RunNativeBar } from "@/components/run-native-bar";
+import { RunBar } from "@/components/run-bar";
 import { TracksTable } from "@/components/tracks-table";
 import { playlistDetailResponseSchema, type PlaylistDto } from "@/lib/api-schemas";
 import { safeHref } from "@/lib/format";
-import { nativeProgress } from "@/lib/track-status";
+import { downloadProgress } from "@/lib/track-status";
 import { useApi } from "@/lib/use-api";
 
 /** While tracks are queued or running, the page asks again this often. */
@@ -101,7 +101,7 @@ export function PlaylistView({ playlistId, skippedCount }: PlaylistViewProps) {
   );
 
   // Live statuses arrive over SSE from slice 4. Until then, poll while work is going on.
-  const active = state.status === "ok" && nativeProgress(state.data.tracks).active > 0;
+  const active = state.status === "ok" && downloadProgress(state.data.tracks).active > 0;
   useEffect(() => {
     if (!active) return;
     const timer = setInterval(refresh, POLL_INTERVAL_MS);
@@ -153,7 +153,7 @@ export function PlaylistView({ playlistId, skippedCount }: PlaylistViewProps) {
               {`${skippedCount} ${skippedCount === 1 ? "track" : "tracks"} in this playlist could not be read (private, removed or blocked in this region) and ${skippedCount === 1 ? "is" : "are"} not listed.`}
             </Notice>
           )}
-          <RunNativeBar playlistId={playlist.id} tracks={tracks} onStarted={refresh} />
+          <RunBar playlistId={playlist.id} tracks={tracks} onChanged={refresh} />
           <PausedTracks tracks={tracks} />
           <TracksTable tracks={tracks} />
         </>

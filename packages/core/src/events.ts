@@ -92,5 +92,7 @@ export const jobEventSchema = z.discriminatedUnion("type", [
     status: z.literal("FAILED"),
     error: z.string().min(1),
   }),
+  /** The owner cancelled the queue before this job started. */
+  z.object({ type: z.literal("job_cancelled"), ...ids, status: z.literal("CANCELLED") }),
 ]);
 export type JobEvent = z.infer<typeof jobEventSchema>;

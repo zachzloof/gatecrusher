@@ -29,6 +29,7 @@ const STATUS_STYLES: Record<Status, StatusStyle> = {
   SUCCEEDED: { label: "Downloaded", dot: "bg-ok", text: "text-ok" },
   MANUAL: { label: "Manual", dot: "bg-manual", text: "text-manual" },
   FAILED: { label: "Failed", dot: "bg-danger", text: "text-danger" },
+  CANCELLED: { label: "Cancelled", dot: "bg-text-faint", text: "text-text-muted" },
 };
 
 export function statusLabel(status: Status): string {

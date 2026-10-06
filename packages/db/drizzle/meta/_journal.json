@@ -15,6 +15,27 @@
       "when": 1790870206662,
       "tag": "0001_wakeful_sersi",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791311865200,
+      "tag": "0002_short_ulik",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791313968305,
+      "tag": "0003_drm_protected_reason",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791315276480,
+      "tag": "0004_cancelled_job_status",
+      "breakpoints": true
     }
   ]
 }

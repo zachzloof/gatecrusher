@@ -10,6 +10,7 @@ import {
 /** Every legal transition, written out independently of the implementation's table. */
 const LEGAL: ReadonlyArray<readonly [JobStatus, JobTransitionEvent, JobStatus]> = [
   ["QUEUED", "start", "RUNNING"],
+  ["QUEUED", "cancel", "CANCELLED"],
   ["RUNNING", "succeed", "SUCCEEDED"],
   ["RUNNING", "needs_human", "WAITING_FOR_HUMAN"],
   ["RUNNING", "impossible", "MANUAL"],
@@ -55,10 +56,16 @@ describe("transition", () => {
     expect(transition("WAITING_FOR_HUMAN", "impossible").ok).toBe(false);
   });
 
-  it("treats SUCCEEDED and MANUAL as terminal", () => {
+  it("treats SUCCEEDED, MANUAL and CANCELLED as terminal", () => {
     for (const event of JOB_TRANSITION_EVENTS) {
       expect(transition("SUCCEEDED", event).ok).toBe(false);
       expect(transition("MANUAL", event).ok).toBe(false);
+      expect(transition("CANCELLED", event).ok).toBe(false);
     }
+  });
+
+  it("cancels only a job that has not started: a running track is left to finish", () => {
+    expect(transition("RUNNING", "cancel").ok).toBe(false);
+    expect(transition("WAITING_FOR_HUMAN", "cancel").ok).toBe(false);
   });
 });

@@ -1,18 +1,25 @@
 // The logic behind the run and screenshot routes, with everything they touch passed in,
 // so tests can run them against a throwaway database, a fake queue and a temp data dir.
 import { createReadStream } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { playlistSlug } from "@gatecrusher/core";
 import {
+  cancelPlaylistRun,
+  deletePlaylist,
+  getSoundcloudAccount,
   isRecordedScreenshot,
   listPlaylistDownloads,
-  startNativeRun,
+  startPlaylistRun,
   type Database,
 } from "@gatecrusher/db";
 import { z } from "zod";
-import { runNativeResponseSchema } from "./api-schemas";
+import {
+  cancelRunResponseSchema,
+  deletePlaylistResponseSchema,
+  runResponseSchema,
+} from "./api-schemas";
 import {
   errorResponse,
   guarded,
@@ -40,24 +47,32 @@ export interface RunHandlerDeps {
   log: HandlerLog;
 }
 
+export const NOT_CONNECTED_MESSAGE =
+  "Connect a SoundCloud account first: SoundCloud only hands an uploader's file or its best stream to a signed-in account.";
+
 const QUEUE_DOWN =
   "Could not reach Redis, so nothing was started. Check `docker compose up -d` is running, then try again.";
 
 /**
- * POST /api/playlists/:id/runs — "Download native tracks".
+ * POST /api/playlists/:id/runs — "Download tracks".
  *
- * Queues every native track that has no verified download yet, one at a time for the
+ * Queues every track that has no verified download yet, one at a time for the
  * worker, and sends paused tracks back for another look. Safe to click repeatedly.
  */
-export function handleRunNative(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
+export function handleStartRun(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
   return guarded(deps.log, "POST /api/playlists/:id/runs", async () => {
     const id = z.uuid().safeParse(playlistId);
     if (!id.success) return errorResponse(404, "not_found", "No such playlist.");
 
+    // Without a login every download would fail, so nothing is queued at all.
+    if ((await withTimeout(getSoundcloudAccount(deps.db), READ_TIMEOUT_MS)) === null) {
+      return errorResponse(409, "soundcloud_not_connected", NOT_CONNECTED_MESSAGE);
+    }
+
     // Checked first, so a Redis outage does not leave jobs queued with nobody told.
     if (!(await deps.queue.isReady())) return errorResponse(503, "queue_unavailable", QUEUE_DOWN);
 
-    const started = await withTimeout(startNativeRun(deps.db, id.data), READ_TIMEOUT_MS);
+    const started = await withTimeout(startPlaylistRun(deps.db, id.data), READ_TIMEOUT_MS);
     if (!started.ok) return errorResponse(404, "not_found", started.reason);
 
     // Jobs that were already queued are handed over again too: if an earlier hand-over
@@ -71,13 +86,13 @@ export function handleRunNative(playlistId: string, deps: RunHandlerDeps): Promi
         return errorResponse(
           503,
           "queue_unavailable",
-          "The tracks are queued but could not be handed to the worker because Redis went away. Click Download native tracks again once it is back.",
+          "The tracks are queued but could not be handed to the worker because Redis went away. Click Download tracks again once it is back.",
         );
       }
     }
 
     return Response.json(
-      runNativeResponseSchema.parse({
+      runResponseSchema.parse({
         runId: started.runId,
         queued: started.newJobIds.length,
         resumed: started.resumedJobIds.length,
@@ -86,6 +101,99 @@ export function handleRunNative(playlistId: string, deps: RunHandlerDeps): Promi
       }),
       { status: 202, headers: NO_STORE },
     );
+  });
+}
+
+/**
+ * DELETE /api/playlists/:id/runs — "Cancel".
+ *
+ * Cancels every queued track of the playlist. A track already downloading finishes;
+ * nothing starts after it. Clicking "Download tracks" queues the cancelled ones again.
+ */
+export function handleCancelRun(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
+  return guarded(deps.log, "DELETE /api/playlists/:id/runs", async () => {
+    const id = z.uuid().safeParse(playlistId);
+    if (!id.success) return errorResponse(404, "not_found", "No such playlist.");
+
+    const cancelled = await withTimeout(cancelPlaylistRun(deps.db, id.data), READ_TIMEOUT_MS);
+    if (!cancelled.ok) return errorResponse(404, "not_found", cancelled.reason);
+
+    return Response.json(
+      cancelRunResponseSchema.parse({ cancelled: cancelled.cancelled, running: cancelled.running }),
+      { headers: NO_STORE },
+    );
+  });
+}
+
+function errorCode(error: unknown): unknown {
+  return error instanceof Error && "code" in error ? error.code : undefined;
+}
+
+/**
+ * Deletes recorded download files, then the folders they leave empty. Only paths inside
+ * the data dir's downloads folder are ever touched. Returns what was removed.
+ */
+async function removeDownloadFiles(
+  filePaths: readonly string[],
+  deps: RunHandlerDeps,
+): Promise<{ deletedFiles: number; freedBytes: number }> {
+  const root = path.resolve(deps.dataDir, "downloads");
+  const folders = new Set<string>();
+  let deletedFiles = 0;
+  let freedBytes = 0;
+
+  for (const filePath of filePaths) {
+    const file = path.resolve(deps.dataDir, filePath);
+    if (!file.startsWith(root + path.sep)) {
+      // A recorded path outside the downloads folder means the database was tampered with.
+      deps.log.error({ filePath }, "Refusing to delete a download outside the downloads folder");
+      continue;
+    }
+    try {
+      const { size } = await stat(file);
+      await rm(file);
+      deletedFiles += 1;
+      freedBytes += size;
+    } catch (error) {
+      // Already gone (removed by hand): nothing to free.
+      if (errorCode(error) !== "ENOENT") throw error;
+    }
+    folders.add(path.dirname(file));
+  }
+
+  for (const folder of folders) {
+    if (folder === root) continue;
+    try {
+      await rmdir(folder);
+    } catch (error) {
+      // Removed only when empty: files the app did not record stay where they are.
+      const code = errorCode(error);
+      if (code !== "ENOTEMPTY" && code !== "ENOENT" && code !== "EEXIST") {
+        deps.log.error({ err: error, folder }, "Could not remove an empty download folder");
+      }
+    }
+  }
+  return { deletedFiles, freedBytes };
+}
+
+/**
+ * DELETE /api/playlists/:id — the playlist, everything recorded about it, and its
+ * downloaded files. Refused while one of its tracks is downloading.
+ */
+export function handleDeletePlaylist(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
+  return guarded(deps.log, "DELETE /api/playlists/:id", async () => {
+    const id = z.uuid().safeParse(playlistId);
+    if (!id.success) return errorResponse(404, "not_found", "No such playlist.");
+
+    const deleted = await withTimeout(deletePlaylist(deps.db, id.data), READ_TIMEOUT_MS);
+    if (!deleted.ok) {
+      return deleted.kind === "busy"
+        ? errorResponse(409, "playlist_busy", deleted.reason)
+        : errorResponse(404, "not_found", deleted.reason);
+    }
+
+    const removed = await removeDownloadFiles(deleted.filePaths, deps);
+    return Response.json(deletePlaylistResponseSchema.parse(removed), { headers: NO_STORE });
   });
 }
 

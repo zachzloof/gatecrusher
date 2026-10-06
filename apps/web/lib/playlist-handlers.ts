@@ -150,6 +150,7 @@ export function handleListPlaylists(deps: HandlerDeps): Promise<Response> {
           ...toPlaylistDto(row),
           trackCount: row.trackCount,
           counts: row.counts,
+          downloads: row.downloads,
         })),
       }),
       { headers: NO_STORE },

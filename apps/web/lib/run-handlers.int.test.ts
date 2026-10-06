@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -7,6 +7,7 @@ import {
   parkJob,
   recordStepStarted,
   savePlaylistIngest,
+  saveSoundcloudAccount,
   schema,
   startJob,
   type ClassifiedTrack,
@@ -16,13 +17,17 @@ import { createTestDatabase, type TestDatabase } from "@gatecrusher/db/testing";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   apiErrorSchema,
+  cancelRunResponseSchema,
+  deletePlaylistResponseSchema,
   playlistDetailResponseSchema,
-  runNativeResponseSchema,
+  runResponseSchema,
 } from "./api-schemas";
 import { handleGetPlaylist } from "./playlist-handlers";
 import {
   handleArchive,
-  handleRunNative,
+  handleCancelRun,
+  handleDeletePlaylist,
+  handleStartRun,
   handleScreenshot,
   type RunHandlerDeps,
 } from "./run-handlers";
@@ -46,6 +51,12 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.delete(schema.playlists);
+  await db.delete(schema.soundcloudAccount);
+  await saveSoundcloudAccount(db, {
+    oauthToken: "2-290123-123456789-aBcDeFgHiJkLmN",
+    soundcloudUserId: "290123",
+    username: "burner-digger",
+  });
 });
 
 const silentLog = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -128,35 +139,35 @@ async function errorOf(response: Response) {
 }
 
 describe("POST /api/playlists/:id/runs", () => {
-  it("queues one job per native track, in playlist order, and hands them to the worker", async () => {
+  it("queues one job per track, native or not, in playlist order, for the worker", async () => {
     const playlistId = await seedPlaylist();
     const { deps, enqueued } = depsWith();
 
-    const response = await handleRunNative(playlistId, deps);
+    const response = await handleStartRun(playlistId, deps);
 
     expect(response.status).toBe(202);
-    const body = runNativeResponseSchema.parse(await response.json());
-    expect(body).toMatchObject({ queued: 2, resumed: 0, alreadyDownloaded: 0, alreadyActive: 0 });
+    const body = runResponseSchema.parse(await response.json());
+    expect(body).toMatchObject({ queued: 3, resumed: 0, alreadyDownloaded: 0, alreadyActive: 0 });
     expect(body.runId).not.toBeNull();
     expect(enqueued).toEqual([await jobIdsInPlaylistOrder()]);
-    expect(await db.$count(schema.jobs)).toBe(2);
+    expect(await db.$count(schema.jobs)).toBe(3);
   });
 
   it("creates nothing new when clicked again, and hands the waiting jobs over again", async () => {
     const playlistId = await seedPlaylist();
     const { deps, enqueued } = depsWith();
-    await handleRunNative(playlistId, deps);
+    await handleStartRun(playlistId, deps);
 
-    const response = await handleRunNative(playlistId, deps);
+    const response = await handleStartRun(playlistId, deps);
 
-    expect(runNativeResponseSchema.parse(await response.json())).toEqual({
+    expect(runResponseSchema.parse(await response.json())).toEqual({
       runId: null,
       queued: 0,
       resumed: 0,
       alreadyDownloaded: 0,
-      alreadyActive: 2,
+      alreadyActive: 3,
     });
-    expect(await db.$count(schema.jobs)).toBe(2);
+    expect(await db.$count(schema.jobs)).toBe(3);
     expect(enqueued).toHaveLength(2);
     expect([...(enqueued[1] ?? [])].sort()).toEqual([...(enqueued[0] ?? [])].sort());
   });
@@ -164,9 +175,11 @@ describe("POST /api/playlists/:id/runs", () => {
   it("skips downloaded tracks and retries paused ones", async () => {
     const playlistId = await seedPlaylist();
     const { deps, enqueued } = depsWith();
-    await handleRunNative(playlistId, deps);
-    const [downloadedId, pausedId] = await jobIdsInPlaylistOrder();
-    if (downloadedId === undefined || pausedId === undefined) throw new Error("expected two jobs");
+    await handleStartRun(playlistId, deps);
+    const [downloadedId, pausedId, queuedId] = await jobIdsInPlaylistOrder();
+    if (downloadedId === undefined || pausedId === undefined || queuedId === undefined) {
+      throw new Error("expected three jobs");
+    }
     for (const jobId of [downloadedId, pausedId]) {
       await startJob(db, { jobId, adapterId: "native-soundcloud", resumedOnOpenPage: false });
     }
@@ -192,22 +205,38 @@ describe("POST /api/playlists/:id/runs", () => {
       pageUrl: "https://soundcloud.com/fixture-artist/track-n2",
     });
 
-    const response = await handleRunNative(playlistId, deps);
+    const response = await handleStartRun(playlistId, deps);
 
-    expect(runNativeResponseSchema.parse(await response.json())).toEqual({
+    expect(runResponseSchema.parse(await response.json())).toEqual({
       runId: null,
       queued: 0,
       resumed: 1,
       alreadyDownloaded: 1,
-      alreadyActive: 0,
+      alreadyActive: 1,
     });
-    expect(enqueued.at(-1)).toEqual([pausedId]);
+    expect(enqueued.at(-1)).toEqual([pausedId, queuedId]);
+  });
+
+  it("starts nothing, and says what to do, when no SoundCloud account is connected", async () => {
+    const playlistId = await seedPlaylist();
+    await db.delete(schema.soundcloudAccount);
+    const { deps, enqueued } = depsWith();
+
+    const response = await handleStartRun(playlistId, deps);
+
+    expect(response.status).toBe(409);
+    const error = await errorOf(response);
+    expect(error.code).toBe("soundcloud_not_connected");
+    expect(error.message).toContain("Connect a SoundCloud account first");
+    expect(enqueued).toEqual([]);
+    expect(await db.$count(schema.jobs)).toBe(0);
+    expect(await db.$count(schema.runs)).toBe(0);
   });
 
   it("starts nothing when Redis is unreachable", async () => {
     const playlistId = await seedPlaylist();
 
-    const response = await handleRunNative(playlistId, depsWith({ ready: false }).deps);
+    const response = await handleStartRun(playlistId, depsWith({ ready: false }).deps);
 
     expect(response.status).toBe(503);
     expect(await errorOf(response)).toMatchObject({ code: "queue_unavailable" });
@@ -218,17 +247,17 @@ describe("POST /api/playlists/:id/runs", () => {
   it("says so when the hand-over fails, and the next click hands the same jobs over", async () => {
     const playlistId = await seedPlaylist();
 
-    const failed = await handleRunNative(playlistId, depsWith({ failEnqueue: true }).deps);
+    const failed = await handleStartRun(playlistId, depsWith({ failEnqueue: true }).deps);
 
     expect(failed.status).toBe(503);
-    expect((await errorOf(failed)).message).toContain("Click Download native tracks again");
-    expect(await db.$count(schema.jobs)).toBe(2);
+    expect((await errorOf(failed)).message).toContain("Click Download tracks again");
+    expect(await db.$count(schema.jobs)).toBe(3);
 
     const { deps, enqueued } = depsWith();
-    const retried = await handleRunNative(playlistId, deps);
+    const retried = await handleStartRun(playlistId, deps);
     expect(retried.status).toBe(202);
     expect([...(enqueued[0] ?? [])].sort()).toEqual((await jobIdsInPlaylistOrder()).sort());
-    expect(await db.$count(schema.jobs)).toBe(2);
+    expect(await db.$count(schema.jobs)).toBe(3);
   });
 
   it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid", "1; drop table jobs"])(
@@ -236,7 +265,7 @@ describe("POST /api/playlists/:id/runs", () => {
     async (id) => {
       const { deps, enqueued } = depsWith();
 
-      const response = await handleRunNative(id, deps);
+      const response = await handleStartRun(id, deps);
 
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");
@@ -247,7 +276,7 @@ describe("POST /api/playlists/:id/runs", () => {
   it("answers a typed 500 when the database is unreachable", async () => {
     const dead = createDb("postgres://nobody:nothing@127.0.0.1:1/nowhere", { max: 1 });
     try {
-      const response = await handleRunNative(
+      const response = await handleStartRun(
         "00000000-0000-4000-8000-000000000000",
         depsWith({}, dead.db).deps,
       );
@@ -283,8 +312,9 @@ describe("GET /api/playlists/:id with run state", () => {
 
   it("reports queued, running, paused and downloaded tracks", async () => {
     const playlistId = await seedPlaylist();
-    await handleRunNative(playlistId, depsWith().deps);
-    const [firstId, secondId] = await jobIdsInPlaylistOrder();
+    await handleStartRun(playlistId, depsWith().deps);
+    // The two native tracks; the gate track between them stays queued.
+    const [firstId, , secondId] = await jobIdsInPlaylistOrder();
     if (firstId === undefined || secondId === undefined) throw new Error("expected two jobs");
     const [first] = await db.select().from(schema.jobs);
     const runId = first?.runId ?? "";
@@ -294,7 +324,7 @@ describe("GET /api/playlists/:id with run state", () => {
     );
     expect(detail.tracks.map((item) => item.job?.status ?? null)).toEqual([
       "QUEUED",
-      null,
+      "QUEUED",
       "QUEUED",
     ]);
 
@@ -360,32 +390,32 @@ describe("GET /api/playlists/:id with run state", () => {
   });
 });
 
+const SONG = Buffer.from("ID3 fake audio ".repeat(100_000));
+
+/** A playlist with its first native track downloaded and the file on disk. */
+async function downloadedPlaylist() {
+  const playlistId = await seedPlaylist();
+  await handleStartRun(playlistId, depsWith().deps);
+  const [jobId] = await jobIdsInPlaylistOrder();
+  if (jobId === undefined) throw new Error("expected a job");
+  await startJob(db, { jobId, adapterId: "yt-dlp", resumedOnOpenPage: false });
+  const relative = "downloads/fixture-crate/Fixture Artist - Track n1.mp3";
+  await mkdir(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true });
+  await writeFile(path.join(dataDir, relative), SONG);
+  await completeJob(db, {
+    jobId,
+    download: {
+      path: relative,
+      sizeBytes: SONG.length,
+      mimeType: "audio/mpeg",
+      kind: "audio",
+      checksumSha256: "a".repeat(64),
+    },
+  });
+  return playlistId;
+}
+
 describe("GET /api/playlists/:id/archive", () => {
-  const SONG = Buffer.from("ID3 fake audio ".repeat(100_000));
-
-  /** A playlist with its first native track downloaded and the file on disk. */
-  async function downloadedPlaylist() {
-    const playlistId = await seedPlaylist();
-    await handleRunNative(playlistId, depsWith().deps);
-    const [jobId] = await jobIdsInPlaylistOrder();
-    if (jobId === undefined) throw new Error("expected a job");
-    await startJob(db, { jobId, adapterId: "yt-dlp", resumedOnOpenPage: false });
-    const relative = "downloads/fixture-crate/Fixture Artist - Track n1.mp3";
-    await mkdir(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true });
-    await writeFile(path.join(dataDir, relative), SONG);
-    await completeJob(db, {
-      jobId,
-      download: {
-        path: relative,
-        sizeBytes: SONG.length,
-        mimeType: "audio/mpeg",
-        kind: "audio",
-        checksumSha256: "a".repeat(64),
-      },
-    });
-    return playlistId;
-  }
-
   it("streams the playlist's files as one stored zip", async () => {
     const playlistId = await downloadedPlaylist();
 
@@ -436,7 +466,7 @@ describe("GET /api/screenshots/*", () => {
   /** A parked job whose screenshot is recorded and, unless told otherwise, on disk. */
   async function recordedScreenshot(options: { onDisk?: boolean } = {}) {
     const playlistId = await seedPlaylist();
-    await handleRunNative(playlistId, depsWith().deps);
+    await handleStartRun(playlistId, depsWith().deps);
     const [jobId] = await jobIdsInPlaylistOrder();
     if (jobId === undefined) throw new Error("expected a job");
     await startJob(db, { jobId, adapterId: "native-soundcloud", resumedOnOpenPage: false });
@@ -510,4 +540,124 @@ describe("GET /api/screenshots/*", () => {
       await dead.close();
     }
   });
+});
+
+const exists = (file: string): Promise<boolean> =>
+  access(file).then(
+    () => true,
+    () => false,
+  );
+
+describe("DELETE /api/playlists/:id/runs", () => {
+  it("cancels the queued tracks and leaves the running one to finish", async () => {
+    const playlistId = await seedPlaylist();
+    await handleStartRun(playlistId, depsWith().deps);
+    const [runningId] = await jobIdsInPlaylistOrder();
+    await startJob(db, { jobId: runningId ?? "", adapterId: "yt-dlp", resumedOnOpenPage: false });
+
+    const response = await handleCancelRun(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(200);
+    expect(cancelRunResponseSchema.parse(await response.json())).toEqual({
+      cancelled: 2,
+      running: 1,
+    });
+    const statuses = (await db.select().from(schema.jobs)).map((job) => job.status).sort();
+    expect(statuses).toEqual(["CANCELLED", "CANCELLED", "RUNNING"]);
+  });
+
+  it("lets Download tracks queue the cancelled tracks again", async () => {
+    const playlistId = await seedPlaylist();
+    const { deps } = depsWith();
+    await handleStartRun(playlistId, deps);
+    await handleCancelRun(playlistId, deps);
+
+    const again = runResponseSchema.parse(await (await handleStartRun(playlistId, deps)).json());
+
+    expect(again.queued).toBe(3);
+  });
+
+  it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid"])(
+    "answers 404 for playlist %s",
+    async (id) => {
+      expect((await handleCancelRun(id, depsWith().deps)).status).toBe(404);
+    },
+  );
+});
+
+describe("DELETE /api/playlists/:id", () => {
+  it("deletes the playlist, its history and its files, and the folder they leave empty", async () => {
+    const playlistId = await downloadedPlaylist();
+    const folder = path.join(dataDir, "downloads", "fixture-crate");
+
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(200);
+    expect(deletePlaylistResponseSchema.parse(await response.json())).toEqual({
+      deletedFiles: 1,
+      freedBytes: SONG.length,
+    });
+    expect(await db.$count(schema.playlists)).toBe(0);
+    expect(await db.$count(schema.jobs)).toBe(0);
+    expect(await exists(folder)).toBe(false);
+  });
+
+  it("keeps files in the folder that the app did not record", async () => {
+    const playlistId = await downloadedPlaylist();
+    const stray = path.join(dataDir, "downloads", "fixture-crate", "mine.wav");
+    await writeFile(stray, "not recorded");
+
+    await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(await exists(stray)).toBe(true);
+    await rm(stray);
+  });
+
+  it("is refused, and changes nothing, while one of its tracks is downloading", async () => {
+    const playlistId = await downloadedPlaylist();
+    const [, secondId] = await jobIdsInPlaylistOrder();
+    await startJob(db, { jobId: secondId ?? "", adapterId: "yt-dlp", resumedOnOpenPage: false });
+
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(409);
+    expect(await errorOf(response)).toMatchObject({ code: "playlist_busy" });
+    expect(await db.$count(schema.playlists)).toBe(1);
+    expect(
+      await exists(path.join(dataDir, "downloads/fixture-crate/Fixture Artist - Track n1.mp3")),
+    ).toBe(true);
+  });
+
+  it("never deletes a recorded path outside the downloads folder", async () => {
+    const playlistId = await downloadedPlaylist();
+    const outside = path.join(dataDir, "keep-me.txt");
+    await writeFile(outside, "not a download");
+    await db.update(schema.downloads).set({ filePath: "keep-me.txt" });
+
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(deletePlaylistResponseSchema.parse(await response.json()).deletedFiles).toBe(0);
+    expect(await exists(outside)).toBe(true);
+    await rm(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true, force: true });
+  });
+
+  it("deletes a playlist whose files were already removed by hand", async () => {
+    const playlistId = await downloadedPlaylist();
+    await rm(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true });
+
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(response.status).toBe(200);
+    expect(deletePlaylistResponseSchema.parse(await response.json())).toEqual({
+      deletedFiles: 0,
+      freedBytes: 0,
+    });
+  });
+
+  it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid"])(
+    "answers 404 for playlist %s",
+    async (id) => {
+      expect((await handleDeletePlaylist(id, depsWith().deps)).status).toBe(404);
+    },
+  );
 });

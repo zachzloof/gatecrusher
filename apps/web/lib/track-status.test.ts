@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { TrackDto, TrackJobDto } from "./api-schemas";
 import {
-  nativeProgress,
+  cancelResultMessage,
+  downloadProgress,
+  failureGroups,
   progressSummary,
   runResultMessage,
   statusDetail,
   statusExplanation,
+  statusReason,
   trackStatus,
 } from "./track-status";
 
@@ -89,6 +92,15 @@ describe("statusDetail and statusExplanation", () => {
     expect(statusExplanation(manual)).toBe("Track removed.");
   });
 
+  it("labels a DRM-only track as such", () => {
+    const manual = track({
+      classification: "buy",
+      job: job({ status: "MANUAL", manual: { reason: "drm_protected", detail: null } }),
+    });
+
+    expect(statusDetail(manual)).toBe("DRM protected");
+  });
+
   it("gives the error of a failed job and the file of a downloaded one", () => {
     expect(
       statusExplanation(track({ job: job({ status: "FAILED", error: "Browser closed" }) })),
@@ -98,9 +110,9 @@ describe("statusDetail and statusExplanation", () => {
   });
 });
 
-describe("nativeProgress and progressSummary", () => {
-  it("counts only native tracks, by where they stand", () => {
-    const progress = nativeProgress([
+describe("downloadProgress and progressSummary", () => {
+  it("counts every track, whatever its classification, by where it stands", () => {
+    const progress = downloadProgress([
       track({ download }),
       track({ job: job({ status: "QUEUED" }) }),
       track({ job: job({ status: "RUNNING", stepName: "download" }) }),
@@ -110,28 +122,30 @@ describe("nativeProgress and progressSummary", () => {
       track(),
       track({ classification: "gate", job: job({ status: "RUNNING" }) }),
       track({ classification: "buy" }),
+      track({ classification: "none", job: job({ status: "CANCELLED" }) }),
     ]);
 
     expect(progress).toEqual({
-      native: 7,
+      total: 10,
       downloaded: 1,
-      active: 2,
+      active: 3,
+      queued: 1,
+      running: 2,
       needsYou: 1,
       manual: 1,
       failed: 1,
+      cancelled: 1,
     });
     expect(progressSummary(progress)).toBe(
-      "Downloaded 1 of 7 native tracks · 2 in progress · 1 needs you · 1 manual · 1 failed",
+      "Downloaded 1 of 10 tracks · 3 in progress · 1 needs you · 1 manual · 1 failed · 1 cancelled",
     );
   });
 
   it("keeps the summary short when nothing else is going on", () => {
-    expect(progressSummary(nativeProgress([track({ download })]))).toBe(
-      "Downloaded 1 of 1 native track",
+    expect(progressSummary(downloadProgress([track({ download })]))).toBe(
+      "Downloaded 1 of 1 track",
     );
-    expect(progressSummary(nativeProgress([track({ classification: "buy" })]))).toBe(
-      "No native tracks in this playlist.",
-    );
+    expect(progressSummary(downloadProgress([]))).toBe("No tracks in this playlist.");
   });
 
   it("agrees in number", () => {
@@ -140,9 +154,7 @@ describe("nativeProgress and progressSummary", () => {
       track({ job: job({ status: "WAITING_FOR_HUMAN", needsHuman }) }),
     ];
 
-    expect(progressSummary(nativeProgress(two))).toBe(
-      "Downloaded 0 of 2 native tracks · 2 need you",
-    );
+    expect(progressSummary(downloadProgress(two))).toBe("Downloaded 0 of 2 tracks · 2 need you");
   });
 });
 
@@ -155,9 +167,80 @@ describe("runResultMessage", () => {
     [{ ...nothing, resumed: 1 }, "Retrying 1 track that needed you."],
     [{ ...nothing, queued: 2, resumed: 1 }, "Queued 2 tracks. Retrying 1 track that needed you."],
     [{ ...nothing, alreadyActive: 2, alreadyDownloaded: 1 }, "2 tracks already in progress."],
-    [{ ...nothing, alreadyDownloaded: 4 }, "Nothing to run: every native track is downloaded."],
-    [nothing, "Nothing to run: this playlist has no native tracks."],
+    [{ ...nothing, alreadyDownloaded: 4 }, "Nothing to run: every track is downloaded."],
+    [nothing, "Nothing to run: this playlist has no tracks."],
   ])("%j -> %s", (result, message) => {
     expect(runResultMessage(result)).toBe(message);
+  });
+});
+
+describe("statusReason", () => {
+  it("spells out why a track failed, is manual, or was cancelled", () => {
+    expect(
+      statusReason(track({ job: job({ status: "FAILED", error: "yt-dlp needs ffmpeg." }) })),
+    ).toEqual({ tone: "danger", text: "yt-dlp needs ffmpeg." });
+    expect(
+      statusReason(
+        track({
+          job: job({
+            status: "MANUAL",
+            manual: { reason: "drm_protected", detail: "Only streamed DRM-protected." },
+          }),
+        }),
+      ),
+    ).toEqual({ tone: "manual", text: "Only streamed DRM-protected." });
+    expect(statusReason(track({ job: job({ status: "CANCELLED" }) }))).toMatchObject({
+      tone: "muted",
+      text: expect.stringContaining("Download tracks") as unknown,
+    });
+  });
+
+  it("is null for everything else, including a failed job with no reason", () => {
+    expect(statusReason(track())).toBeNull();
+    expect(statusReason(track({ download }))).toBeNull();
+    expect(statusReason(track({ job: job({ status: "RUNNING" }) }))).toBeNull();
+    expect(statusReason(track({ job: job({ status: "FAILED", error: null }) }))).toBeNull();
+  });
+});
+
+describe("failureGroups", () => {
+  it("groups failed tracks by reason, most common first, ties in playlist order", () => {
+    const failed = (error: string | null) => track({ job: job({ status: "FAILED", error }) });
+
+    expect(
+      failureGroups([
+        failed("Login expired."),
+        failed("ffmpeg missing."),
+        failed("ffmpeg missing."),
+        failed(null),
+        track({ download }),
+        track({ download, job: job({ status: "FAILED", error: "old" }) }),
+      ]),
+    ).toEqual([
+      { message: "ffmpeg missing.", count: 2 },
+      { message: "Login expired.", count: 1 },
+      { message: "No reason was recorded.", count: 1 },
+    ]);
+  });
+
+  it("is empty when nothing failed", () => {
+    expect(failureGroups([track(), track({ download })])).toEqual([]);
+  });
+});
+
+describe("cancelResultMessage", () => {
+  it.each([
+    [
+      { cancelled: 5, running: 1 },
+      "Cancelled 5 tracks. The track downloading now will finish; nothing starts after.",
+    ],
+    [{ cancelled: 1, running: 0 }, "Cancelled 1 track."],
+    [
+      { cancelled: 0, running: 1 },
+      "Nothing was waiting. The track downloading now will finish; nothing starts after.",
+    ],
+    [{ cancelled: 0, running: 0 }, "Nothing was queued."],
+  ])("%j -> %s", (result, message) => {
+    expect(cancelResultMessage(result)).toBe(message);
   });
 });

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type {
   PlaylistDetailResponse,
-  RunNativeResponse,
+  RunResponse,
   TrackDto,
   TrackJobDto,
 } from "../lib/api-schemas";
@@ -17,7 +17,7 @@ const ONE_PIXEL_PNG = Buffer.from(
   "base64",
 );
 
-const NOTHING: RunNativeResponse = {
+const NOTHING: RunResponse = {
   runId: null,
   queued: 0,
   resumed: 0,
@@ -84,7 +84,7 @@ async function fakePlaylist(
   };
 }
 
-/** Fakes "Download native tracks" and counts the clicks that reached the server. */
+/** Fakes "Download tracks" and counts the clicks that reached the server. */
 async function fakeRun(
   page: Page,
   status: number,
@@ -99,21 +99,24 @@ async function fakeRun(
 }
 
 const trackRows = (page: Page) => page.getByRole("table", { name: "Tracks" }).locator("tbody tr");
-const runBar = (page: Page) => page.getByRole("region", { name: "Native downloads" });
-const runButton = (page: Page) => page.getByRole("button", { name: "Download native tracks" });
+const runBar = (page: Page) => page.getByRole("region", { name: "Downloads" });
+const runButton = (page: Page) => page.getByRole("button", { name: "Download tracks" });
 
 test.beforeEach(async ({ page }) => {
   await fakeApi(page);
 });
 
-test("run native tracks: queued, running with its step, then downloaded", async ({ page }) => {
+test("run tracks: queued, running with its step, then downloaded", async ({ page }) => {
   const playlist = await fakePlaylist(page, DETAIL);
   const run = await fakeRun(page, 202, { ...NOTHING, runId: RUN_ID, queued: 1 });
   await page.goto(`/playlists/${PLAYLIST_ID}`);
 
   const native = trackRows(page).first();
   await expect(native).toContainText("Native Download (Original Mix)");
-  await expect(runBar(page)).toContainText("Downloaded 0 of 1 native track");
+  await expect(runBar(page)).toContainText("Downloaded 0 of 6 tracks");
+  const bar = page.getByRole("progressbar", { name: "Playlist progress" });
+  await expect(bar).toHaveAttribute("aria-valuemax", "6");
+  await expect(bar).toHaveAttribute("aria-valuenow", "0");
   // Never run: no job status yet.
   await expect(native).not.toContainText("Queued");
 
@@ -131,11 +134,12 @@ test("run native tracks: queued, running with its step, then downloaded", async 
 
   playlist.becomes(DOWNLOADED);
   await expect(native).toContainText("Downloaded");
-  await expect(runBar(page)).toContainText("Downloaded 1 of 1 native track");
+  await expect(runBar(page)).toContainText("Downloaded 1 of 6 tracks");
+  await expect(bar).toHaveAttribute("aria-valuenow", "1");
 
-  // Nothing left to run.
-  await expect(runButton(page)).toBeDisabled();
-  // Tracks that are not native never get a job status.
+  // The other tracks are still to download, so the run can be started again.
+  await expect(runButton(page)).toBeEnabled();
+  // Tracks without a job show no job status.
   await expect(trackRows(page).nth(1)).not.toContainText("Queued");
 });
 
@@ -154,7 +158,7 @@ test("a paused track shows what it needs and its screenshot, and running again r
   await expect(paused).toContainText("Fixture Artist — Native Download (Original Mix)");
   await expect(paused).toContainText("Solve the captcha in the worker's browser window.");
   await expect(paused).toContainText("step open-more");
-  await expect(paused).toContainText("click Download native tracks again");
+  await expect(paused).toContainText("click Download tracks again");
 
   const screenshot = paused.getByRole("img", { name: /showing a captcha/ });
   await expect(screenshot).toBeVisible();
@@ -220,16 +224,16 @@ test("manual and failed tracks say why", async ({ page }) => {
   await expect(trackRows(page).first()).toContainText("Manual");
   await expect(trackRows(page).first()).toContainText("dead link");
   await expect(trackRows(page).last()).toContainText("Failed");
-  await expect(runBar(page)).toContainText("Downloaded 0 of 2 native tracks · 1 manual · 1 failed");
+  await expect(runBar(page)).toContainText("Downloaded 0 of 7 tracks · 1 manual · 1 failed");
   // Both can be run again.
   await expect(runButton(page)).toBeEnabled();
 });
 
-test("a playlist with no native tracks cannot be run", async ({ page }) => {
-  await fakePlaylist(page, { ...DETAIL, tracks: TRACKS.slice(1) });
+test("a playlist whose tracks are all downloaded cannot be run", async ({ page }) => {
+  await fakePlaylist(page, { ...DOWNLOADED, tracks: DOWNLOADED.tracks.slice(0, 1) });
   await page.goto(`/playlists/${PLAYLIST_ID}`);
 
-  await expect(runBar(page)).toContainText("No native tracks in this playlist.");
+  await expect(runBar(page)).toContainText("Downloaded 1 of 1 track");
   await expect(runButton(page)).toBeDisabled();
 });
 
@@ -245,4 +249,57 @@ test("the page with statuses and a paused track fits the viewport", async ({ pag
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("cancel stops the queued tracks, which say so and can be queued again", async ({ page }) => {
+  const playlist = await fakePlaylist(page, detailWith({ job: job({ status: "QUEUED" }) }));
+  const cancels: string[] = [];
+  await page.route(`**/api/playlists/${PLAYLIST_ID}/runs`, (route) => {
+    cancels.push(route.request().method());
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ cancelled: 1, running: 0 }),
+    });
+  });
+  await page.goto(`/playlists/${PLAYLIST_ID}`);
+
+  const cancel = page.getByRole("button", { name: "Cancel" });
+  await expect(cancel).toBeEnabled();
+  playlist.becomes(detailWith({ job: job({ status: "CANCELLED" }) }));
+  await cancel.click();
+
+  await expect(runBar(page)).toContainText("Cancelled 1 track.");
+  expect(cancels).toEqual(["DELETE"]);
+  await expect(trackRows(page).first()).toContainText("Cancelled");
+  await expect(trackRows(page).first()).toContainText("Cancelled before it started");
+  await expect(runBar(page)).toContainText("1 cancelled");
+  // Nothing is queued any more, and the tracks can be downloaded again.
+  await expect(cancel).toBeDisabled();
+  await expect(runButton(page)).toBeEnabled();
+});
+
+test("failed tracks show why on the page, and the run bar groups the reasons", async ({ page }) => {
+  const ffmpeg =
+    "yt-dlp needs ffmpeg to embed the tags and artwork. Install it (winget install Gyan.FFmpeg), restart the worker, then click Download tracks.";
+  const [, second, third] = TRACKS;
+  if (second === undefined || third === undefined) throw new Error("fixture playlist is short");
+  await fakePlaylist(page, {
+    ...DETAIL,
+    tracks: [
+      { ...(TRACKS[0] ?? second), job: job({ status: "FAILED", error: ffmpeg }) },
+      { ...second, job: job({ status: "FAILED", error: ffmpeg }) },
+      { ...third, job: job({ status: "FAILED", error: "yt-dlp timed out downloading the file." }) },
+      ...TRACKS.slice(3),
+    ],
+  });
+  await page.goto(`/playlists/${PLAYLIST_ID}`);
+
+  // The reason is printed on the row itself, not only in a tooltip.
+  await expect(trackRows(page).first()).toContainText("yt-dlp needs ffmpeg");
+  const reasons = runBar(page).getByRole("list", { name: "Why tracks failed" });
+  await expect(reasons.getByRole("listitem").first()).toContainText("2×");
+  await expect(reasons.getByRole("listitem").first()).toContainText("yt-dlp needs ffmpeg");
+  await expect(reasons.getByRole("listitem").nth(1)).toContainText("1×");
+  await expect(reasons.getByRole("listitem").nth(1)).toContainText("timed out");
 });

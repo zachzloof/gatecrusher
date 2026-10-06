@@ -88,6 +88,7 @@ describe("jobEventSchema", () => {
     },
     { type: "job_failed", ...ids, status: "FAILED", error: "Browser closed" },
     { type: "job_continued", ...ids, status: "QUEUED" },
+    { type: "job_cancelled", ...ids, status: "CANCELLED" },
   ];
 
   it.each(events)("accepts $type", (event) => {

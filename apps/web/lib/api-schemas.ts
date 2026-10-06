@@ -7,6 +7,7 @@ import {
   jobStatusSchema,
   manualReasonSchema,
   soundcloudPlaylistUrlSchema,
+  soundcloudTokenSchema,
   trackClassificationSchema,
 } from "@gatecrusher/core";
 import { z } from "zod";
@@ -24,6 +25,12 @@ export const API_ERROR_CODES = [
   "not_found",
   /** Redis is unreachable, so nothing can be handed to the worker. */
   "queue_unavailable",
+  /** Downloads need a signed-in SoundCloud account and none is connected. */
+  "soundcloud_not_connected",
+  /** SoundCloud refused the pasted login token. */
+  "soundcloud_token_rejected",
+  /** One of the playlist's tracks is downloading, so it cannot be deleted yet. */
+  "playlist_busy",
   "internal",
 ] as const;
 
@@ -83,6 +90,11 @@ const playlistSummarySchema = playlistSchema.extend({
     buy: z.number().int().nonnegative(),
     none: z.number().int().nonnegative(),
   }),
+  /** Its verified downloads on disk, which deleting the playlist removes. */
+  downloads: z.object({
+    count: z.number().int().nonnegative(),
+    bytes: z.number().nonnegative(),
+  }),
 });
 export type PlaylistSummaryDto = z.infer<typeof playlistSummarySchema>;
 
@@ -141,8 +153,26 @@ export const playlistDetailResponseSchema = z.object({
 });
 export type PlaylistDetailResponse = z.infer<typeof playlistDetailResponseSchema>;
 
-/** What clicking "Download native tracks" did. */
-export const runNativeResponseSchema = z.object({
+/** Which SoundCloud account downloads run as. Never carries the token. */
+export const soundcloudAccountResponseSchema = z.discriminatedUnion("connected", [
+  z.object({ connected: z.literal(false) }),
+  z.object({
+    connected: z.literal(true),
+    username: z.string(),
+    connectedAt: z.iso.datetime(),
+    /** When SoundCloud last accepted the token. */
+    verifiedAt: z.iso.datetime(),
+  }),
+]);
+export type SoundcloudAccountResponse = z.infer<typeof soundcloudAccountResponseSchema>;
+
+/** The `oauth_token` cookie value the owner copied from their browser. */
+export const connectSoundcloudRequestSchema = z.object({
+  token: soundcloudTokenSchema,
+});
+
+/** What clicking "Download tracks" did. */
+export const runResponseSchema = z.object({
   /** The run created for tracks that needed a new job, or null when none did. */
   runId: z.uuid().nullable(),
   /** Tracks handed to the worker for the first time (or again after a failure). */
@@ -153,7 +183,23 @@ export const runNativeResponseSchema = z.object({
   /** Tracks that were already queued or running. */
   alreadyActive: z.number().int().nonnegative(),
 });
-export type RunNativeResponse = z.infer<typeof runNativeResponseSchema>;
+export type RunResponse = z.infer<typeof runResponseSchema>;
+
+/** What clicking "Cancel" did. */
+export const cancelRunResponseSchema = z.object({
+  /** Queued tracks that will not be downloaded now. */
+  cancelled: z.number().int().nonnegative(),
+  /** Tracks downloading at that moment: each finishes, and nothing starts after it. */
+  running: z.number().int().nonnegative(),
+});
+export type CancelRunResponse = z.infer<typeof cancelRunResponseSchema>;
+
+/** What deleting a playlist removed. */
+export const deletePlaylistResponseSchema = z.object({
+  deletedFiles: z.number().int().nonnegative(),
+  freedBytes: z.number().nonnegative(),
+});
+export type DeletePlaylistResponse = z.infer<typeof deletePlaylistResponseSchema>;
 
 const buyListItemSchema = z.object({
   trackId: z.uuid(),

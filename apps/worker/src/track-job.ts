@@ -79,7 +79,11 @@ async function closeTab(page: Page | undefined, log: Logger): Promise<void> {
  */
 export async function processTrackJob(jobId: string, deps: TrackJobDeps): Promise<TrackJobResult> {
   const found = await getJobContext(deps.db, jobId);
-  if (found === null) throw new Error(`Track job ${jobId} does not exist`);
+  if (found === null) {
+    // Its playlist was deleted after the job was queued.
+    deps.log.info({ jobId }, "Job no longer exists, skipping");
+    return { jobId, outcome: "skipped" };
+  }
   const { job, track, playlist } = found;
   const log = deps.log.child({ jobId, runId: job.runId, trackId: track.id });
 

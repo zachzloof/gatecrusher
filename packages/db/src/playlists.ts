@@ -4,7 +4,7 @@ import type {
   IngestedTrack,
   TrackClassification,
 } from "@gatecrusher/core";
-import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import type { Database } from "./client.ts";
 import { downloads, jobs, playlists, tracks } from "./schema.ts";
 
@@ -151,6 +151,8 @@ export type ClassificationCounts = Record<TrackClassification, number>;
 export interface PlaylistWithCounts extends PlaylistRow {
   trackCount: number;
   counts: ClassificationCounts;
+  /** Its verified downloads: what deleting the playlist removes from disk. */
+  downloads: { count: number; bytes: number };
 }
 
 function emptyCounts(): ClassificationCounts {
@@ -159,7 +161,7 @@ function emptyCounts(): ClassificationCounts {
 
 /** Every playlist, most recently ingested first, with its tracks counted per classification. */
 export async function listPlaylists(db: Database): Promise<PlaylistWithCounts[]> {
-  const [rows, grouped] = await Promise.all([
+  const [rows, grouped, downloaded] = await Promise.all([
     db
       .select()
       .from(playlists)
@@ -172,7 +174,19 @@ export async function listPlaylists(db: Database): Promise<PlaylistWithCounts[]>
       })
       .from(tracks)
       .groupBy(tracks.playlistId, tracks.classification),
+    db
+      .select({
+        playlistId: tracks.playlistId,
+        count: sql<number>`count(*)::int`,
+        bytes: sql<number>`coalesce(sum(${downloads.sizeBytes}), 0)::float8`,
+      })
+      .from(downloads)
+      .innerJoin(tracks, eq(downloads.trackId, tracks.id))
+      .groupBy(tracks.playlistId),
   ]);
+  const downloadsByPlaylist = new Map(
+    downloaded.map((row) => [row.playlistId, { count: row.count, bytes: row.bytes }]),
+  );
 
   const countsByPlaylist = new Map<string, ClassificationCounts>();
   for (const group of grouped) {
@@ -187,6 +201,7 @@ export async function listPlaylists(db: Database): Promise<PlaylistWithCounts[]>
       ...row,
       counts,
       trackCount: counts.native + counts.gate + counts.buy + counts.none,
+      downloads: downloadsByPlaylist.get(row.id) ?? { count: 0, bytes: 0 },
     };
   });
 }
@@ -290,4 +305,61 @@ export async function listPlaylistDownloads(
     .where(eq(tracks.playlistId, playlistId))
     .orderBy(asc(tracks.position), asc(tracks.id));
   return { playlist, files };
+}
+
+export type DeletePlaylistResult =
+  | {
+      ok: true;
+      /** The verified downloads it had, relative to the data dir, for the caller to remove. */
+      filePaths: string[];
+    }
+  | { ok: false; kind: "playlist_not_found" | "busy"; reason: string };
+
+/**
+ * Removes a playlist and everything recorded about it: tracks, runs, jobs, events and
+ * download rows all cascade. Refused while one of its tracks is downloading, so the
+ * worker never writes a file the database no longer knows about. Queued jobs go with it;
+ * the worker skips them when the queue hands them over.
+ */
+export async function deletePlaylist(
+  db: Database,
+  playlistId: string,
+): Promise<DeletePlaylistResult> {
+  return db.transaction(async (tx) => {
+    const [playlist] = await tx
+      .select({ id: playlists.id })
+      .from(playlists)
+      .where(eq(playlists.id, playlistId))
+      .for("update");
+    if (playlist === undefined) {
+      return { ok: false, kind: "playlist_not_found", reason: "No such playlist." };
+    }
+
+    // Locking the job rows makes the worker's start of a queued job wait for this
+    // transaction, and a job it already started shows up as RUNNING here.
+    const trackIds = tx
+      .select({ id: tracks.id })
+      .from(tracks)
+      .where(eq(tracks.playlistId, playlistId));
+    const playlistJobs = await tx
+      .select({ status: jobs.status })
+      .from(jobs)
+      .where(inArray(jobs.trackId, trackIds))
+      .for("update");
+    if (playlistJobs.some((job) => job.status === "RUNNING")) {
+      return {
+        ok: false,
+        kind: "busy",
+        reason:
+          "A track from this playlist is downloading right now. Open the playlist, click Cancel, wait for that track to finish, then delete it.",
+      };
+    }
+
+    const files = await tx
+      .select({ filePath: downloads.filePath })
+      .from(downloads)
+      .where(inArray(downloads.trackId, trackIds));
+    await tx.delete(playlists).where(eq(playlists.id, playlistId));
+    return { ok: true, filePaths: files.map((file) => file.filePath) };
+  });
 }

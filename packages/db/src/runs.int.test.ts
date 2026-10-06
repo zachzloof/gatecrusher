@@ -13,8 +13,13 @@ import {
   refreshRun,
   startJob,
 } from "./jobs.ts";
-import { savePlaylistIngest, type ClassifiedTrack } from "./playlists.ts";
-import { getPlaylistTrackStates, isRecordedScreenshot, startNativeRun } from "./runs.ts";
+import { deletePlaylist, savePlaylistIngest, type ClassifiedTrack } from "./playlists.ts";
+import {
+  cancelPlaylistRun,
+  getPlaylistTrackStates,
+  isRecordedScreenshot,
+  startPlaylistRun,
+} from "./runs.ts";
 import { downloads, events, humanRequests, jobs, playlists, runs, tracks } from "./schema.ts";
 import { createTestDatabase, type TestDatabase } from "./testing.ts";
 
@@ -135,26 +140,32 @@ async function eventsOf(jobId: string) {
   return rows;
 }
 
-describe("startNativeRun", () => {
-  it("creates one queued job per native track, in playlist order, and nothing for gate or buy", async () => {
+describe("startPlaylistRun", () => {
+  it("creates one queued job per track, whatever its classification, in playlist order", async () => {
     const { playlistId, trackIds } = await seedPlaylist();
 
-    const result = await startNativeRun(db, playlistId);
+    const result = await startPlaylistRun(db, playlistId);
 
     expect(result).toMatchObject({ ok: true, alreadyDownloaded: 0, alreadyRunning: 0 });
     if (!result.ok || result.runId === null) throw new Error("expected a run");
-    expect(result.newJobIds).toHaveLength(3);
+    expect(result.newJobIds).toHaveLength(5);
     const created = await Promise.all(result.newJobIds.map(jobOf));
-    expect(created.map((job) => job.trackId)).toEqual([trackIds.n1, trackIds.n2, trackIds.n3]);
+    expect(created.map((job) => job.trackId)).toEqual([
+      trackIds.n1,
+      trackIds.g1,
+      trackIds.n2,
+      trackIds.b1,
+      trackIds.n3,
+    ]);
     expect(new Set(created.map((job) => job.status))).toEqual(new Set(["QUEUED"]));
-    expect(await db.$count(jobs)).toBe(3);
+    expect(await db.$count(jobs)).toBe(5);
     const [run] = await db.select().from(runs).where(eq(runs.id, result.runId));
-    expect(run).toMatchObject({ playlistId, status: "RUNNING", totalJobs: 3 });
+    expect(run).toMatchObject({ playlistId, status: "RUNNING", totalJobs: 5 });
   });
 
   it("skips tracks that already have a verified download", async () => {
     const { playlistId, trackIds } = await seedPlaylist();
-    const first = await startNativeRun(db, playlistId);
+    const first = await startPlaylistRun(db, playlistId);
     if (!first.ok) throw new Error("expected a run");
     const [jobId] = first.newJobIds;
     if (jobId === undefined) throw new Error("expected a job");
@@ -163,7 +174,7 @@ describe("startNativeRun", () => {
     await db.delete(jobs).where(eq(jobs.trackId, trackIds.n2 ?? ""));
     await db.delete(jobs).where(eq(jobs.trackId, trackIds.n3 ?? ""));
 
-    const second = await startNativeRun(db, playlistId);
+    const second = await startPlaylistRun(db, playlistId);
 
     expect(second).toMatchObject({ ok: true, alreadyDownloaded: 1 });
     if (!second.ok) return;
@@ -173,13 +184,13 @@ describe("startNativeRun", () => {
 
   it("leaves queued and running jobs alone when clicked again", async () => {
     const { playlistId } = await seedPlaylist();
-    const first = await startNativeRun(db, playlistId);
+    const first = await startPlaylistRun(db, playlistId);
     if (!first.ok) throw new Error("expected a run");
     const [runningId, ...queuedIds] = first.newJobIds;
     if (runningId === undefined) throw new Error("expected a job");
     await started(runningId);
 
-    const second = await startNativeRun(db, playlistId);
+    const second = await startPlaylistRun(db, playlistId);
 
     expect(second).toMatchObject({
       ok: true,
@@ -189,13 +200,13 @@ describe("startNativeRun", () => {
       alreadyRunning: 1,
     });
     expect(second.ok && [...second.queuedJobIds].sort()).toEqual([...queuedIds].sort());
-    expect(await db.$count(jobs)).toBe(3);
+    expect(await db.$count(jobs)).toBe(5);
     expect(await db.$count(runs)).toBe(1);
   });
 
   it("queues a parked job again in place, at its checkpoint, and closes its request", async () => {
     const { playlistId } = await seedPlaylist();
-    const first = await startNativeRun(db, playlistId);
+    const first = await startPlaylistRun(db, playlistId);
     if (!first.ok || first.runId === null) throw new Error("expected a run");
     const [parkedId, ...others] = first.newJobIds;
     if (parkedId === undefined) throw new Error("expected a job");
@@ -208,12 +219,12 @@ describe("startNativeRun", () => {
     await refreshRun(db, first.runId);
     expect((await db.select().from(runs))[0]?.status).toBe("FINISHED");
 
-    const second = await startNativeRun(db, playlistId);
+    const second = await startPlaylistRun(db, playlistId);
 
     if (!second.ok) throw new Error("expected ok");
     expect(second.resumedJobIds).toEqual([parkedId]);
-    // The two failed tracks get new jobs in a new run.
-    expect(second.newJobIds).toHaveLength(2);
+    // The four failed tracks get new jobs in a new run.
+    expect(second.newJobIds).toHaveLength(4);
     expect(second.runId).not.toBe(first.runId);
 
     expect(await jobOf(parkedId)).toMatchObject({
@@ -233,7 +244,7 @@ describe("startNativeRun", () => {
 
   it("gives a track marked manual a fresh job on the next run", async () => {
     const { playlistId, trackIds } = await seedPlaylist();
-    const first = await startNativeRun(db, playlistId);
+    const first = await startPlaylistRun(db, playlistId);
     if (!first.ok) throw new Error("expected a run");
     const [jobId] = first.newJobIds;
     if (jobId === undefined) throw new Error("expected a job");
@@ -245,25 +256,25 @@ describe("startNativeRun", () => {
       link: "https://soundcloud.com/fixture-artist/track-n1",
     });
 
-    const second = await startNativeRun(db, playlistId);
+    const second = await startPlaylistRun(db, playlistId);
 
     if (!second.ok) throw new Error("expected ok");
     expect(second.newJobIds).toHaveLength(1);
     expect((await jobOf(second.newJobIds[0] ?? "")).trackId).toBe(trackIds.n1);
   });
 
-  it("does nothing for a playlist with no native tracks", async () => {
+  it("does nothing for a playlist with no tracks", async () => {
     const { playlistId } = await savePlaylistIngest(db, {
-      soundcloudUrl: "https://soundcloud.com/fixture-curator/sets/stream-only",
+      soundcloudUrl: "https://soundcloud.com/fixture-curator/sets/empty",
       source: "api_v2",
       soundcloudId: "9002",
-      title: "Stream only",
+      title: "Empty",
       owner: null,
       artworkUrl: null,
-      tracks: [track("s1", { classification: "none", downloadable: false })],
+      tracks: [],
     });
 
-    expect(await startNativeRun(db, playlistId)).toEqual({
+    expect(await startPlaylistRun(db, playlistId)).toEqual({
       ok: true,
       runId: null,
       newJobIds: [],
@@ -276,7 +287,7 @@ describe("startNativeRun", () => {
   });
 
   it("reports an unknown playlist", async () => {
-    expect(await startNativeRun(db, "00000000-0000-4000-8000-000000000000")).toMatchObject({
+    expect(await startPlaylistRun(db, "00000000-0000-4000-8000-000000000000")).toMatchObject({
       ok: false,
       kind: "playlist_not_found",
     });
@@ -286,20 +297,144 @@ describe("startNativeRun", () => {
     const { playlistId } = await seedPlaylist();
 
     const [a, b] = await Promise.all([
-      startNativeRun(db, playlistId),
-      startNativeRun(db, playlistId),
+      startPlaylistRun(db, playlistId),
+      startPlaylistRun(db, playlistId),
     ]);
 
     expect(a.ok && b.ok).toBe(true);
-    expect(await db.$count(jobs)).toBe(3);
+    expect(await db.$count(jobs)).toBe(5);
     expect(await db.$count(runs)).toBe(1);
+  });
+});
+
+describe("cancelPlaylistRun", () => {
+  it("cancels every queued job, leaves the running one, and finishes the run", async () => {
+    const { playlistId } = await seedPlaylist();
+    const first = await startPlaylistRun(db, playlistId);
+    if (!first.ok || first.runId === null) throw new Error("expected a run");
+    const [runningId, ...queuedIds] = first.newJobIds;
+    if (runningId === undefined) throw new Error("expected a job");
+    await started(runningId);
+
+    const result = await cancelPlaylistRun(db, playlistId);
+
+    expect(result).toEqual({ ok: true, cancelled: 4, running: 1 });
+    for (const jobId of queuedIds) {
+      const job = await jobOf(jobId);
+      expect(job.status).toBe("CANCELLED");
+      expect(job.finishedAt).toBeInstanceOf(Date);
+      expect((await eventsOf(jobId)).at(-1)?.type).toBe("job_cancelled");
+    }
+    expect((await jobOf(runningId)).status).toBe("RUNNING");
+    // Still running: the run finishes once that job does.
+    const [run] = await db.select().from(runs).where(eq(runs.id, first.runId));
+    expect(run?.status).toBe("RUNNING");
+
+    await completeJob(db, { jobId: runningId, download });
+    await refreshRun(db, first.runId);
+    const [after] = await db.select().from(runs).where(eq(runs.id, first.runId));
+    expect(after).toMatchObject({ status: "FINISHED", succeededCount: 1 });
+  });
+
+  it("queues cancelled tracks again on the next run", async () => {
+    const { playlistId } = await seedPlaylist();
+    await startPlaylistRun(db, playlistId);
+    await cancelPlaylistRun(db, playlistId);
+
+    const second = await startPlaylistRun(db, playlistId);
+
+    expect(second.ok && second.newJobIds).toHaveLength(5);
+  });
+
+  it("does nothing when nothing is queued, and is safe to click twice", async () => {
+    const { playlistId } = await seedPlaylist();
+    expect(await cancelPlaylistRun(db, playlistId)).toEqual({ ok: true, cancelled: 0, running: 0 });
+
+    await startPlaylistRun(db, playlistId);
+    await cancelPlaylistRun(db, playlistId);
+    expect(await cancelPlaylistRun(db, playlistId)).toEqual({ ok: true, cancelled: 0, running: 0 });
+  });
+
+  it("leaves other playlists' queues alone", async () => {
+    const { playlistId } = await seedPlaylist();
+    const { playlistId: otherId } = await savePlaylistIngest(db, {
+      soundcloudUrl: "https://soundcloud.com/fixture-curator/sets/other",
+      source: "api_v2",
+      soundcloudId: "9003",
+      title: "Other",
+      owner: null,
+      artworkUrl: null,
+      tracks: [track("o1")],
+    });
+    const other = await startPlaylistRun(db, otherId);
+    await startPlaylistRun(db, playlistId);
+
+    await cancelPlaylistRun(db, playlistId);
+
+    expect((await jobOf((other.ok && other.newJobIds[0]) || "")).status).toBe("QUEUED");
+  });
+
+  it("reports an unknown playlist", async () => {
+    expect(await cancelPlaylistRun(db, "00000000-0000-4000-8000-000000000000")).toMatchObject({
+      ok: false,
+      kind: "playlist_not_found",
+    });
+  });
+});
+
+describe("deletePlaylist", () => {
+  it("removes the playlist and everything recorded about it, and hands back its files", async () => {
+    const { playlistId } = await seedPlaylist();
+    const run = await startPlaylistRun(db, playlistId);
+    if (!run.ok) throw new Error("expected a run");
+    const [jobId] = run.newJobIds;
+    if (jobId === undefined) throw new Error("expected a job");
+    await started(jobId);
+    await completeJob(db, { jobId, download });
+
+    const result = await deletePlaylist(db, playlistId);
+
+    expect(result).toEqual({ ok: true, filePaths: [download.path] });
+    expect(await db.$count(playlists)).toBe(0);
+    expect(await db.$count(tracks)).toBe(0);
+    expect(await db.$count(runs)).toBe(0);
+    expect(await db.$count(jobs)).toBe(0);
+    expect(await db.$count(events)).toBe(0);
+    expect(await db.$count(downloads)).toBe(0);
+  });
+
+  it("is refused while one of its tracks is downloading", async () => {
+    const { playlistId } = await seedPlaylist();
+    const run = await startPlaylistRun(db, playlistId);
+    if (!run.ok) throw new Error("expected a run");
+    await started(run.newJobIds[0] ?? "");
+
+    const result = await deletePlaylist(db, playlistId);
+
+    expect(result).toMatchObject({ ok: false, kind: "busy" });
+    expect(await db.$count(playlists)).toBe(1);
+  });
+
+  it("deletes a playlist whose tracks are only queued", async () => {
+    const { playlistId } = await seedPlaylist();
+    await startPlaylistRun(db, playlistId);
+
+    expect(await deletePlaylist(db, playlistId)).toEqual({ ok: true, filePaths: [] });
+    expect(await db.$count(jobs)).toBe(0);
+  });
+
+  it("reports an unknown playlist", async () => {
+    expect(await deletePlaylist(db, "00000000-0000-4000-8000-000000000000")).toMatchObject({
+      ok: false,
+      kind: "playlist_not_found",
+    });
   });
 });
 
 describe("job lifecycle", () => {
   async function oneJob() {
     const { playlistId, trackIds } = await seedPlaylist();
-    const result = await startNativeRun(db, playlistId);
+    const result = await startPlaylistRun(db, playlistId);
     if (!result.ok || result.runId === null) throw new Error("expected a run");
     const [jobId] = result.newJobIds;
     if (jobId === undefined) throw new Error("expected a job");
@@ -465,7 +600,7 @@ describe("job lifecycle", () => {
     const { jobId, playlistId } = await oneJob();
     await started(jobId);
     await park(jobId);
-    await startNativeRun(db, playlistId);
+    await startPlaylistRun(db, playlistId);
     await started(jobId);
 
     const again = await park(jobId);
@@ -565,10 +700,11 @@ describe("job lifecycle", () => {
 
   it("recounts a run and finishes it once nothing is queued or running", async () => {
     const { playlistId } = await seedPlaylist();
-    const result = await startNativeRun(db, playlistId);
+    const result = await startPlaylistRun(db, playlistId);
     if (!result.ok || result.runId === null) throw new Error("expected a run");
-    const [a, b, c] = result.newJobIds;
+    const [a, b, c, d, e] = result.newJobIds;
     if (a === undefined || b === undefined || c === undefined) throw new Error("expected jobs");
+    if (d === undefined || e === undefined) throw new Error("expected jobs");
     const runOf = async () =>
       (
         await db
@@ -591,16 +727,20 @@ describe("job lifecycle", () => {
       detail: "x",
       link: "https://a.example/x",
     });
+    for (const jobId of [d, e]) {
+      await started(jobId);
+      await markJobFailed(db, { jobId, error: "x" });
+    }
     await refreshRun(db, result.runId);
 
     // One job is still waiting for the human: the run is finished, waiting on you.
     const run = await runOf();
     expect(run).toMatchObject({
       status: "FINISHED",
-      totalJobs: 3,
+      totalJobs: 5,
       succeededCount: 1,
       manualCount: 1,
-      failedCount: 0,
+      failedCount: 2,
     });
     expect(run?.finishedAt).toBeInstanceOf(Date);
   });
@@ -615,9 +755,10 @@ describe("getPlaylistTrackStates", () => {
 
   it("reports each track's latest job, open request, current step and download", async () => {
     const { playlistId, trackIds } = await seedPlaylist();
-    const result = await startNativeRun(db, playlistId);
+    const result = await startPlaylistRun(db, playlistId);
     if (!result.ok || result.runId === null) throw new Error("expected a run");
-    const [a, b, c] = result.newJobIds;
+    // The native tracks n1, n2 and n3; the gate and buy tracks between them stay queued.
+    const [a, , b, , c] = result.newJobIds;
     if (a === undefined || b === undefined || c === undefined) throw new Error("expected jobs");
     await started(a);
     await completeJob(db, { jobId: a, download });
@@ -639,7 +780,8 @@ describe("getPlaylistTrackStates", () => {
 
     const states = await getPlaylistTrackStates(db, playlistId);
 
-    expect(states.size).toBe(3);
+    expect(states.size).toBe(5);
+    expect(states.get(trackIds.g1 ?? "")).toMatchObject({ job: { status: "QUEUED" } });
     expect(states.get(trackIds.n1 ?? "")).toMatchObject({
       job: { status: "SUCCEEDED" },
       humanRequest: null,
@@ -662,13 +804,13 @@ describe("getPlaylistTrackStates", () => {
 
   it("reports the newest job when a track has been run more than once", async () => {
     const { playlistId, trackIds } = await seedPlaylist();
-    const first = await startNativeRun(db, playlistId);
+    const first = await startPlaylistRun(db, playlistId);
     if (!first.ok) throw new Error("expected a run");
     for (const jobId of first.newJobIds) {
       await started(jobId);
       await markJobFailed(db, { jobId, error: "first attempt" });
     }
-    const second = await startNativeRun(db, playlistId);
+    const second = await startPlaylistRun(db, playlistId);
     if (!second.ok) throw new Error("expected a run");
 
     const states = await getPlaylistTrackStates(db, playlistId);
@@ -681,7 +823,7 @@ describe("getPlaylistTrackStates", () => {
 describe("isRecordedScreenshot", () => {
   it("knows only the paths jobs recorded", async () => {
     const { playlistId } = await seedPlaylist();
-    const result = await startNativeRun(db, playlistId);
+    const result = await startPlaylistRun(db, playlistId);
     if (!result.ok || result.runId === null) throw new Error("expected a run");
     const [jobId] = result.newJobIds;
     if (jobId === undefined) throw new Error("expected a job");

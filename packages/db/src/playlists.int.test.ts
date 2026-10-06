@@ -246,6 +246,24 @@ describe("listPlaylists", () => {
     const empty = listed.find((row) => row.trackCount === 0);
     expect(empty?.counts).toEqual({ native: 0, gate: 0, buy: 0, none: 0 });
   });
+
+  it("totals each playlist's verified downloads, for the delete confirmation", async () => {
+    const { playlistId } = await savePlaylistIngest(db, ingest());
+    await addDownload(await trackIdFor(playlistId, "1"));
+    await addDownload(await trackIdFor(playlistId, "2"));
+    await savePlaylistIngest(
+      db,
+      ingest({ soundcloudUrl: "https://soundcloud.com/fixture-artist/sets/other", tracks: [] }),
+    );
+
+    const listed = await listPlaylists(db);
+
+    expect(listed.find((row) => row.id === playlistId)?.downloads).toEqual({
+      count: 2,
+      bytes: 4_000_000,
+    });
+    expect(listed.find((row) => row.id !== playlistId)?.downloads).toEqual({ count: 0, bytes: 0 });
+  });
 });
 
 describe("getPlaylistWithTracks", () => {

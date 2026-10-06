@@ -7,6 +7,7 @@ import type {
   GateListResponse,
   ListPlaylistsResponse,
   PlaylistDetailResponse,
+  SoundcloudAccountResponse,
   TrackDto,
 } from "../lib/api-schemas";
 
@@ -86,7 +87,12 @@ export const DETAIL: PlaylistDetailResponse = {
 
 export const PLAYLISTS: ListPlaylistsResponse = {
   playlists: [
-    { ...DETAIL.playlist, trackCount: 6, counts: { native: 1, gate: 2, buy: 2, none: 1 } },
+    {
+      ...DETAIL.playlist,
+      trackCount: 6,
+      counts: { native: 1, gate: 2, buy: 2, none: 1 },
+      downloads: { count: 1, bytes: 8_912_896 },
+    },
   ],
 };
 
@@ -116,7 +122,16 @@ export const GATE_LIST: GateListResponse = {
   })),
 };
 
+export const CONNECTED: SoundcloudAccountResponse = {
+  connected: true,
+  username: "burner-digger",
+  connectedAt: "2026-10-01T12:00:00.000Z",
+  verifiedAt: "2026-10-06T09:30:00.000Z",
+};
+
 export interface FakeApi {
+  /** What GET /api/soundcloud-account answers. Default: nobody connected. */
+  account?: SoundcloudAccountResponse;
   playlists?: ListPlaylistsResponse;
   detail?: PlaylistDetailResponse;
   buyList?: BuyListResponse;
@@ -134,6 +149,11 @@ export async function fakeApi(page: Page, api: FakeApi = {}): Promise<void> {
   await page.route("**/api/playlists", (route) =>
     route.request().method() === "GET"
       ? route.fulfill(json(api.playlists ?? { playlists: [] }))
+      : route.fallback(),
+  );
+  await page.route("**/api/soundcloud-account", (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill(json(api.account ?? { connected: false }))
       : route.fallback(),
   );
   await page.route("**/api/buy-list", (route) => route.fulfill(json(api.buyList ?? { items: [] })));
