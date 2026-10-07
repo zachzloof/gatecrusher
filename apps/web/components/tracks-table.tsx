@@ -45,16 +45,15 @@ interface SortHeadProps {
   sort: TrackSort;
   onSort: (key: SortKey) => void;
   className?: string;
-  align?: "left" | "right";
 }
 
-function SortHead({ label, sortKey, sort, onSort, className, align = "left" }: SortHeadProps) {
+function SortHead({ label, sortKey, sort, onSort, className }: SortHeadProps) {
   const active = sort.key === sortKey;
   const Arrow = sort.direction === "asc" ? ArrowUp : ArrowDown;
   return (
     <TableHead
       aria-sort={active ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
-      className={cn(align === "right" && "text-right", className)}
+      className={className}
     >
       <button
         type="button"
@@ -228,8 +227,7 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 sortKey="position"
                 sort={sort}
                 onSort={onSort}
-                align="right"
-                className="hidden w-12 md:table-cell"
+                className="hidden w-10 md:table-cell"
               />
               <TableHead className="w-11 md:w-10">
                 <span className="sr-only">Artwork</span>
@@ -240,34 +238,31 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 sortKey="classification"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-28 md:table-cell"
+                className="hidden w-[5.5rem] md:table-cell"
               />
-              <TableHead className="hidden w-40 sm:table-cell xl:w-52">Status</TableHead>
+              <TableHead className="hidden w-36 sm:table-cell xl:w-44">Status</TableHead>
               <SortHead
                 label="Gate"
                 sortKey="gatePlatform"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-28 lg:table-cell"
+                className="hidden w-20 lg:table-cell"
               />
               <SortHead
                 label="Time"
                 sortKey="duration"
                 sort={sort}
                 onSort={onSort}
-                align="right"
-                className="hidden w-20 md:table-cell"
+                className="hidden w-14 md:table-cell"
               />
-              <TableHead className="hidden w-32 text-right md:table-cell xl:w-56">
-                HQ Download
-              </TableHead>
-              <TableHead className="w-[4.5rem] text-right md:w-12">Link</TableHead>
+              <TableHead className="hidden w-32 md:table-cell xl:w-56">HQ Download</TableHead>
+              <TableHead className="w-[4.5rem] md:w-12">Link</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visible.map((track) => (
               <TableRow key={track.id} className="hover:bg-surface-2">
-                <TableCell className="hidden text-right font-mono text-xs text-text-muted tabular-nums md:table-cell">
+                <TableCell className="hidden font-mono text-xs text-text-muted tabular-nums md:table-cell">
                   {track.position + 1}
                 </TableCell>
                 <TableCell>
@@ -308,16 +303,16 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 <TableCell className="hidden truncate font-mono text-xs text-text-muted lg:table-cell">
                   {track.gatePlatform ?? <span aria-hidden="true">—</span>}
                 </TableCell>
-                <TableCell className="hidden text-right font-mono text-xs text-text-muted tabular-nums md:table-cell">
+                <TableCell className="hidden font-mono text-xs text-text-muted tabular-nums md:table-cell">
                   {formatDuration(track.durationMs)}
                 </TableCell>
                 <TableCell className="hidden md:table-cell">
-                  <div className="flex items-center justify-end">
+                  <div className="flex items-center">
                     <HqDownloadLink track={track} />
                   </div>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center gap-1">
                     {/* Below 768px the HQ Download column folds into this cell as an icon. */}
                     <HqDownloadIcon track={track} className="md:hidden" />
                     <a
