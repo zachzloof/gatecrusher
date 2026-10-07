@@ -103,7 +103,7 @@ are skipped on the next click; failed ones are retried. If SoundCloud answers 40
 429, the worker marks that track failed and takes no jobs for ten minutes.
 
 **Download zip** on the playlist page bundles every verified file of that playlist into
-one archive, streamed straight from disk.
+one archive, streamed straight from disk. Tick tracks in the table to zip only those.
 
 The **HQ Download** column on each playlist has the store or free-download gate link of
 every track, for you to handle in your own browser.

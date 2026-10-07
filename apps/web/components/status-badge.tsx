@@ -61,7 +61,7 @@ export function StatusBadge({ status, detail, className }: StatusBadgeProps) {
           style.pulse === true && "animate-pulse",
         )}
       />
-      <span className="truncate">
+      <span className="min-w-0 truncate">
         {style.label}
         {detail !== undefined && detail !== null && detail !== "" && (
           <span className="font-mono text-xs text-text-muted">{` · ${detail}`}</span>

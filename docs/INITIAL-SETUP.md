@@ -103,7 +103,8 @@ that browser ends the token; connect again with a fresh one.
    **Gate** (a free-download gate link), **Buy** (a store link), **No download**.
 2. **Download native tracks.** The worker fetches the native ones one at a time, a pause
    between each, and verifies every file. Rows go Queued → Running → Downloaded.
-3. **Download zip** bundles the playlist's verified files into one archive. Files also
+3. **Download zip** bundles the playlist's verified files into one archive, or only the
+   tracks you tick in the table. Files also
    sit in `data/downloads/<playlist-slug>/`.
 4. The **HQ Download** column has each track's store or gate link to handle yourself.
 

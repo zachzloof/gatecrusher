@@ -402,6 +402,40 @@ describe("GET /api/playlists/:id/archive", () => {
     expect((await errorOf(response)).message).toContain("Nothing has been downloaded");
   });
 
+  it("holds only the ticked tracks when some are named", async () => {
+    const playlistId = await downloadedPlaylist();
+    const rows = await db.select().from(schema.tracks);
+    const downloaded = rows.find((row) => row.soundcloudId === "n1");
+    const notDownloaded = rows.find((row) => row.soundcloudId === "n2");
+    if (downloaded === undefined || notDownloaded === undefined) throw new Error("fixture");
+
+    const both = await handleArchive(
+      playlistId,
+      depsWith().deps,
+      `${downloaded.id},${notDownloaded.id}`,
+    );
+    expect(both.status).toBe(200);
+    const zip = Buffer.from(await both.arrayBuffer());
+    expect(zip.includes(Buffer.from("Fixture Artist - Track n1.mp3"))).toBe(true);
+
+    // Ticked tracks without a file give nothing to zip.
+    const none = await handleArchive(playlistId, depsWith().deps, notDownloaded.id);
+    expect(none.status).toBe(404);
+    expect((await errorOf(none)).message).toContain("None of the ticked tracks");
+  });
+
+  it.each(["", "not-an-id", "00000000-0000-4000-8000-000000000000,"])(
+    "rejects the tracks field %j",
+    async (field) => {
+      const playlistId = await downloadedPlaylist();
+
+      const response = await handleArchive(playlistId, depsWith().deps, field);
+
+      expect(response.status).toBe(400);
+      expect((await errorOf(response)).code).toBe("invalid_request");
+    },
+  );
+
   it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid"])(
     "answers 404 for playlist %s",
     async (id) => {

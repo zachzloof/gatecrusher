@@ -3,7 +3,7 @@
 import { playlistSlug, type IngestSource } from "@gatecrusher/core";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ErrorState, RowsSkeleton } from "@/components/data-states";
 import { PausedTracks } from "@/components/paused-tracks";
 import { RunBar } from "@/components/run-bar";
@@ -100,6 +100,9 @@ export function PlaylistView({ playlistId, skippedCount }: PlaylistViewProps) {
     playlistDetailResponseSchema,
   );
 
+  // Tracks ticked in the table: the zip is limited to them while any are ticked.
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+
   // Live statuses arrive over SSE from slice 4. Until then, poll while work is going on.
   const active = state.status === "ok" && downloadProgress(state.data.tracks).active > 0;
   useEffect(() => {
@@ -156,11 +159,12 @@ export function PlaylistView({ playlistId, skippedCount }: PlaylistViewProps) {
           <RunBar
             playlistId={playlist.id}
             tracks={tracks}
+            selected={selected}
             onChanged={refresh}
             downloadsFolder={playlistSlug(playlist.soundcloudUrl, playlist.title)}
           />
           <PausedTracks tracks={tracks} />
-          <TracksTable tracks={tracks} />
+          <TracksTable tracks={tracks} selected={selected} onSelectedChange={setSelected} />
         </>
       );
     }

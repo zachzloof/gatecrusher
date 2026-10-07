@@ -220,32 +220,55 @@ function asciiFileName(name: string): string {
   return ascii === "" ? "playlist" : ascii;
 }
 
+/** The `tracks` field of the archive route: which tracks to include, ids separated by commas. */
+const archiveTracksSchema = z.array(z.uuid()).min(1).max(5_000);
+
 /**
- * GET /api/playlists/:id/archive — every verified download of a playlist as one zip,
- * streamed straight from the files on disk. Only paths recorded in `downloads` that
- * resolve inside the data dir's downloads folder are ever read.
+ * GET and POST /api/playlists/:id/archive — the verified downloads of a playlist as one
+ * zip, streamed straight from the files on disk. `tracks` (a POST form field, ids
+ * separated by commas) limits the zip to those tracks; without it, every file goes in.
+ * Only paths recorded in `downloads` that resolve inside the data dir's downloads
+ * folder are ever read.
  */
-export function handleArchive(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
+export function handleArchive(
+  playlistId: string,
+  deps: RunHandlerDeps,
+  tracksField: string | null = null,
+): Promise<Response> {
   return guarded(deps.log, "GET /api/playlists/:id/archive", async () => {
     const id = z.uuid().safeParse(playlistId);
     if (!id.success) return errorResponse(404, "not_found", "No such playlist.");
+    const ids = tracksField === null ? null : archiveTracksSchema.safeParse(tracksField.split(","));
+    if (ids !== null && !ids.success) {
+      return errorResponse(400, "invalid_request", "tracks must be track ids separated by commas.");
+    }
+    const only = ids === null ? null : new Set(ids.data);
+
     const found = await withTimeout(listPlaylistDownloads(deps.db, id.data), READ_TIMEOUT_MS);
     if (found === null) return errorResponse(404, "not_found", "No such playlist.");
-    if (found.files.length === 0) {
-      return errorResponse(404, "not_found", "Nothing has been downloaded for this playlist yet.");
+    const files =
+      only === null ? found.files : found.files.filter((file) => only.has(file.trackId));
+    if (files.length === 0) {
+      return errorResponse(
+        404,
+        "not_found",
+        only === null
+          ? "Nothing has been downloaded for this playlist yet."
+          : "None of the ticked tracks has been downloaded yet.",
+      );
     }
 
     const root = path.resolve(deps.dataDir, "downloads");
-    const paths = found.files.map((file) => path.resolve(deps.dataDir, file.filePath));
+    const paths = files.map((file) => path.resolve(deps.dataDir, file.filePath));
     if (paths.some((file) => !file.startsWith(root + path.sep))) {
       // A recorded path outside the downloads folder means the database was tampered
       // with; nothing is served from it.
       throw new Error("A recorded download path is outside the downloads folder");
     }
-    const names = uniqueEntryNames(found.files.map((file) => path.basename(file.filePath)));
+    const names = uniqueEntryNames(files.map((file) => path.basename(file.filePath)));
 
     const zip = createZipStream(
-      found.files.map((file, index) => ({
+      files.map((file, index) => ({
         name: names[index] ?? path.basename(file.filePath),
         sizeBytes: file.sizeBytes,
         // Paths come from the downloads table at run time; nothing to trace at build time.

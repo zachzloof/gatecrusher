@@ -61,7 +61,7 @@ Expected afterwards:
 
 Add a playlist that also has a gate track and a buy track. Neither gets a job. Each shows
 its gate or store link in the **HQ Download** column of the tracks table (an icon below
-768px wide). Nothing is fetched for either, and nothing is fetched for "No download"
+1024px wide). Nothing is fetched for either, and nothing is fetched for "No download"
 tracks: the worker log shows no yt-dlp run for them.
 
 ### 4. If a track ends up Manual or Failed

@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowDown, ArrowUp, ExternalLink, Link2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Artwork } from "@/components/artwork";
 import { EmptyState } from "@/components/empty-state";
 import { StatusBadge, statusLabel } from "@/components/status-badge";
@@ -139,7 +139,7 @@ function HqDownloadLink({ track }: { track: TrackDto }) {
         target="_blank"
         rel="noopener noreferrer"
         title={href}
-        className="hidden min-w-0 truncate font-mono text-xs text-text-muted underline-offset-2 hover:text-text hover:underline xl:block"
+        className="hidden w-52 truncate font-mono text-xs text-text-muted underline-offset-2 hover:text-text hover:underline xl:block"
       >
         {middleTruncate(displayUrl(href), 28)}
       </a>
@@ -167,7 +167,54 @@ function HqDownloadIcon({ track, className }: { track: TrackDto; className?: str
   );
 }
 
-export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
+const CHECKBOX = "size-4 shrink-0 cursor-pointer accent-text";
+
+/** Narrow columns keep to their text; whatever is left goes to the title. */
+const SNUG = "whitespace-nowrap";
+
+/** Checked, unchecked, or part-way: the header box that ticks every visible row. */
+function SelectAllBox({
+  visible,
+  selected,
+  onChange,
+}: {
+  visible: readonly TrackDto[];
+  selected: ReadonlySet<string>;
+  onChange: (next: ReadonlySet<string>) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const tickedCount = visible.filter((track) => selected.has(track.id)).length;
+  const all = visible.length > 0 && tickedCount === visible.length;
+  useEffect(() => {
+    if (ref.current !== null) ref.current.indeterminate = tickedCount > 0 && !all;
+  }, [tickedCount, all]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      aria-label="Select all shown tracks"
+      className={CHECKBOX}
+      checked={all}
+      onChange={() => {
+        const next = new Set(selected);
+        for (const track of visible) {
+          if (all) next.delete(track.id);
+          else next.add(track.id);
+        }
+        onChange(next);
+      }}
+    />
+  );
+}
+
+interface TracksTableProps {
+  tracks: readonly TrackDto[];
+  /** Ids of the ticked tracks. */
+  selected: ReadonlySet<string>;
+  onSelectedChange: (next: ReadonlySet<string>) => void;
+}
+
+export function TracksTable({ tracks, selected, onSelectedChange }: TracksTableProps) {
   const [filter, setFilter] = useState<ClassificationFilter>("all");
   const [sort, setSort] = useState<TrackSort>(DEFAULT_SORT);
 
@@ -177,6 +224,11 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
     [tracks, filter, sort],
   );
   const onSort = (key: SortKey) => setSort((current) => nextSort(current, key));
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (!next.delete(id)) next.add(id);
+    onSelectedChange(next);
+  };
 
   if (tracks.length === 0) {
     return (
@@ -219,7 +271,8 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
           the rest.
         </EmptyState>
       ) : (
-        <Table aria-label="Tracks">
+        // Auto layout: each narrow column is as wide as its text, the title gets the rest.
+        <Table aria-label="Tracks" className="table-auto">
           <TableHeader>
             <TableRow>
               <SortHead
@@ -227,48 +280,63 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 sortKey="position"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-10 md:table-cell"
+                className={cn("hidden md:table-cell", SNUG)}
               />
               <TableHead className="w-11 md:w-10">
                 <span className="sr-only">Artwork</span>
               </TableHead>
-              <SortHead label="Title" sortKey="title" sort={sort} onSort={onSort} />
+              <SortHead
+                label="Title"
+                sortKey="title"
+                sort={sort}
+                onSort={onSort}
+                className="w-full"
+              />
               <SortHead
                 label="Class"
                 sortKey="classification"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-[5.5rem] md:table-cell"
+                className={cn("hidden md:table-cell", SNUG)}
               />
-              <TableHead className="hidden w-36 sm:table-cell xl:w-44">Status</TableHead>
+              <TableHead className={cn("hidden sm:table-cell", SNUG)}>Status</TableHead>
               <SortHead
                 label="Gate"
                 sortKey="gatePlatform"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-20 lg:table-cell"
+                className={cn("hidden lg:table-cell", SNUG)}
               />
               <SortHead
                 label="Time"
                 sortKey="duration"
                 sort={sort}
                 onSort={onSort}
-                className="hidden w-14 md:table-cell"
+                className={cn("hidden md:table-cell", SNUG)}
               />
-              <TableHead className="hidden w-32 md:table-cell xl:w-56">HQ Download</TableHead>
-              <TableHead className="w-[4.5rem] md:w-12">Link</TableHead>
+              <TableHead className={cn("hidden lg:table-cell", SNUG)}>HQ Download</TableHead>
+              <TableHead className={SNUG}>Link</TableHead>
+              <TableHead className={SNUG}>
+                <SelectAllBox visible={visible} selected={selected} onChange={onSelectedChange} />
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {visible.map((track) => (
               <TableRow key={track.id} className="hover:bg-surface-2">
-                <TableCell className="hidden font-mono text-xs text-text-muted tabular-nums md:table-cell">
+                <TableCell
+                  className={cn(
+                    "hidden font-mono text-xs text-text-muted tabular-nums md:table-cell",
+                    SNUG,
+                  )}
+                >
                   {track.position + 1}
                 </TableCell>
                 <TableCell>
                   <Artwork url={track.artworkUrl} />
                 </TableCell>
-                <TableCell>
+                {/* max-w-0 lets the title truncate instead of stretching the table. */}
+                <TableCell className="w-full max-w-0">
                   <div className="flex items-center gap-2 leading-4">
                     <span className="truncate text-text" title={track.title}>
                       {track.title}
@@ -294,27 +362,35 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                   </div>
                   <Reason track={track} />
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
+                <TableCell className={cn("hidden md:table-cell", SNUG)}>
                   <StatusBadge status={track.classification} />
                 </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  <RunStatus track={track} />
+                <TableCell className={cn("hidden sm:table-cell", SNUG)}>
+                  {/* Capped so a long step name truncates instead of widening the column. */}
+                  <RunStatus track={track} className="max-w-48" />
                 </TableCell>
-                <TableCell className="hidden truncate font-mono text-xs text-text-muted lg:table-cell">
+                <TableCell
+                  className={cn("hidden font-mono text-xs text-text-muted lg:table-cell", SNUG)}
+                >
                   {track.gatePlatform ?? <span aria-hidden="true">—</span>}
                 </TableCell>
-                <TableCell className="hidden font-mono text-xs text-text-muted tabular-nums md:table-cell">
+                <TableCell
+                  className={cn(
+                    "hidden font-mono text-xs text-text-muted tabular-nums md:table-cell",
+                    SNUG,
+                  )}
+                >
                   {formatDuration(track.durationMs)}
                 </TableCell>
-                <TableCell className="hidden md:table-cell">
+                <TableCell className={cn("hidden lg:table-cell", SNUG)}>
                   <div className="flex items-center">
                     <HqDownloadLink track={track} />
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className={SNUG}>
                   <div className="flex items-center gap-1">
-                    {/* Below 768px the HQ Download column folds into this cell as an icon. */}
-                    <HqDownloadIcon track={track} className="md:hidden" />
+                    {/* Below 1024px the HQ Download column folds into this cell as an icon. */}
+                    <HqDownloadIcon track={track} className="lg:hidden" />
                     <a
                       href={safeHref(track.permalinkUrl)}
                       target="_blank"
@@ -326,6 +402,15 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                       <ExternalLink className="size-4" aria-hidden="true" />
                     </a>
                   </div>
+                </TableCell>
+                <TableCell className={SNUG}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${track.title}`}
+                    className={CHECKBOX}
+                    checked={selected.has(track.id)}
+                    onChange={() => toggle(track.id)}
+                  />
                 </TableCell>
               </TableRow>
             ))}

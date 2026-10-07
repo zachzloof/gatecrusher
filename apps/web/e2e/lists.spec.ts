@@ -24,6 +24,54 @@ test("a playlist with downloaded files offers them as one zip", async ({ page })
   await expect(zipLink).toHaveAttribute("download", "");
 });
 
+test("ticking tracks limits the zip to them; nothing ticked means everything", async ({ page }) => {
+  const [first, second] = TRACKS;
+  if (first === undefined || second === undefined) throw new Error("fixture playlist is short");
+  const file = { fileName: "x.mp3", sizeBytes: 1_000_000, kind: "audio" } as const;
+  const done = {
+    status: "SUCCEEDED",
+    stepName: null,
+    needsHuman: null,
+    manual: null,
+    error: null,
+  } as const;
+  const tracks: TrackDto[] = [
+    { ...first, job: done, download: file },
+    { ...second, job: done, download: file },
+    ...TRACKS.slice(2),
+  ];
+  await fakeApi(page, { detail: { ...DETAIL, tracks } });
+  await page.goto(`/playlists/${PLAYLIST_ID}`);
+
+  await expect(page.getByRole("link", { name: /Download zip/ })).toContainText("2 files");
+
+  // Tick one downloaded track: the zip is a form naming just it.
+  await page.getByRole("checkbox", { name: `Select ${second.title}` }).check();
+  const zip = page.getByRole("button", { name: /Download zip/ });
+  await expect(zip).toContainText("1 ticked file, 1.0 MB");
+  await expect(page.locator('form[action$="/archive"] input[name="tracks"]')).toHaveValue(
+    second.id,
+  );
+  await expect(page.getByRole("link", { name: /Download zip/ })).toHaveCount(0);
+
+  // Tick a track with no file: it cannot add anything.
+  await page.getByRole("checkbox", { name: `Select ${second.title}` }).uncheck();
+  await page.getByRole("checkbox", { name: "Select Stream Only" }).check();
+  await expect(page.getByRole("button", { name: /nothing ticked is downloaded/ })).toBeDisabled();
+
+  // Select all, then clear: back to the plain link.
+  const all = page.getByRole("checkbox", { name: "Select all shown tracks" });
+  await all.check();
+  await expect(page.locator('form[action$="/archive"] input[name="tracks"]')).toHaveValue(
+    `${first.id},${second.id}`,
+  );
+  await all.uncheck();
+  await expect(page.getByRole("link", { name: /Download zip/ })).toHaveAttribute(
+    "href",
+    `/api/playlists/${PLAYLIST_ID}/archive`,
+  );
+});
+
 test("the zip button is disabled until something has been downloaded", async ({ page }) => {
   await fakeApi(page, { detail: DETAIL });
   await page.goto(`/playlists/${PLAYLIST_ID}`);

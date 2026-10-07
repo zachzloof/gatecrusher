@@ -148,6 +148,8 @@ function Failures({ tracks }: { tracks: readonly TrackDto[] }) {
 interface RunBarProps {
   playlistId: string;
   tracks: readonly TrackDto[];
+  /** Ids of the tracks ticked in the table. While any are ticked, the zip holds only them. */
+  selected: ReadonlySet<string>;
   /** Called once a run was started or cancelled, so the page can show the new statuses. */
   onChanged: () => void;
   /** The playlist's folder under downloads/, opened by "Open folder" in the desktop app. */
@@ -159,7 +161,54 @@ interface RunBarProps {
  * far it has got. Clicking "Download tracks" again is how failed, cancelled or paused
  * tracks are retried, so it stays available while a run is in progress.
  */
-export function RunBar({ playlistId, tracks, onChanged, downloadsFolder }: RunBarProps) {
+/** What "Download zip" offers: everything, or the ticked tracks that have a file. */
+function ZipButton({
+  playlistId,
+  downloaded,
+  selected,
+}: {
+  playlistId: string;
+  downloaded: readonly TrackDto[];
+  selected: ReadonlySet<string>;
+}) {
+  const ticked = selected.size > 0;
+  const files = ticked ? downloaded.filter((track) => selected.has(track.id)) : downloaded;
+  const bytes = files.reduce((total, track) => total + (track.download?.sizeBytes ?? 0), 0);
+  const count = `${files.length} ${ticked ? "ticked " : ""}${files.length === 1 ? "file" : "files"}`;
+
+  if (files.length === 0) {
+    return (
+      <Button disabled>
+        <FolderArchive aria-hidden="true" />
+        {ticked ? "Download zip · nothing ticked is downloaded" : "Download zip"}
+      </Button>
+    );
+  }
+  const action = `/api/playlists/${encodeURIComponent(playlistId)}/archive`;
+  const label = `Download zip · ${count}, ${formatBytes(bytes)}`;
+  if (!ticked) {
+    return (
+      <Button asChild>
+        <a href={action} download>
+          <FolderArchive aria-hidden="true" />
+          {label}
+        </a>
+      </Button>
+    );
+  }
+  // A form, so a long list of ids never runs into a URL length limit.
+  return (
+    <form method="post" action={action}>
+      <input type="hidden" name="tracks" value={files.map((track) => track.id).join(",")} />
+      <Button type="submit">
+        <FolderArchive aria-hidden="true" />
+        {label}
+      </Button>
+    </form>
+  );
+}
+
+export function RunBar({ playlistId, tracks, selected, onChanged, downloadsFolder }: RunBarProps) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
   const desktop = useDesktop();
   const progress = downloadProgress(tracks);
@@ -168,10 +217,6 @@ export function RunBar({ playlistId, tracks, onChanged, downloadsFolder }: RunBa
   const pending = outcome.kind === "pending";
   const nothingLeft = progress.downloaded === progress.total;
   const downloaded = tracks.filter((track) => track.download !== null);
-  const downloadedBytes = downloaded.reduce(
-    (total, track) => total + (track.download?.sizeBytes ?? 0),
-    0,
-  );
 
   async function act(action: "start" | "cancel"): Promise<void> {
     if (pending) return;
@@ -206,19 +251,7 @@ export function RunBar({ playlistId, tracks, onChanged, downloadsFolder }: RunBa
           <Square aria-hidden="true" />
           {outcome.kind === "pending" && outcome.action === "cancel" ? "Cancelling…" : "Cancel"}
         </Button>
-        {downloaded.length > 0 ? (
-          <Button asChild>
-            <a href={`/api/playlists/${encodeURIComponent(playlistId)}/archive`} download>
-              <FolderArchive aria-hidden="true" />
-              {`Download zip · ${downloaded.length} ${downloaded.length === 1 ? "file" : "files"}, ${formatBytes(downloadedBytes)}`}
-            </a>
-          </Button>
-        ) : (
-          <Button disabled>
-            <FolderArchive aria-hidden="true" />
-            Download zip
-          </Button>
-        )}
+        <ZipButton playlistId={playlistId} downloaded={downloaded} selected={selected} />
         {desktop !== null && (
           <Button
             onClick={() => void desktop.openDownloads(downloadsFolder)}
