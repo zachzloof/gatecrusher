@@ -7,8 +7,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runMigrations } from "@gatecrusher/db/migrate";
 import { app, ipcMain, session, shell, type BrowserWindow } from "electron";
-import { accessStatus, effectiveNow, isCorrectCode, type AccessStatus } from "./access.ts";
-import { ACCESS_CODE_SHA256, BUILD_EXPIRES_AT, OWNER_CONTACT } from "./build-config.ts";
+import {
+  acceptCode,
+  accessStatus,
+  effectiveNow,
+  findCodeByHash,
+  type AccessStatus,
+} from "./access.ts";
+import { ACCESS_CODES, OWNER_CONTACT } from "./build-config.ts";
 import { downloadsFolderSchema, submittedCodeSchema, type GateState } from "./gate-state.ts";
 import { IPC } from "./ipc.ts";
 import { createMainLog, type MainLog } from "./log.ts";
@@ -45,7 +51,7 @@ let mainWindow: BrowserWindow | null = null;
 const running: Running = {};
 let stopping: Promise<void> | null = null;
 let stopped = false;
-let codeEntered: (() => void) | null = null;
+let codeEntered: ((acceptedCodeHash: string) => void) | null = null;
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -67,8 +73,27 @@ function closeGate(): void {
   gate = null;
 }
 
-function expiredState(): GateState {
-  return { mode: "expired", expiredAt: BUILD_EXPIRES_AT, contact: OWNER_CONTACT };
+/** The code screen, after the code this machine entered has reached its end date. */
+function expiredState(expiredAt: string): GateState {
+  return { mode: "code", contact: OWNER_CONTACT, expiredAt };
+}
+
+/** One line about this build for the Help menu: the end date of the code in use, if any. */
+function aboutLine(store: DesktopStore): string {
+  const code = findCodeByHash(store.acceptedCodeHash, ACCESS_CODES);
+  const until =
+    code?.expiresAt == null ? "" : `, test build until ${code.expiresAt.slice(0, 10)}`;
+  return `Gatecrusher ${app.getVersion()}${until}`;
+}
+
+/** Shows the code screen and waits until a code this build accepts is entered. */
+async function askForCode(state: GateState): Promise<string> {
+  showGate(state);
+  const acceptedCodeHash = await new Promise<string>((resolve) => {
+    codeEntered = resolve;
+  });
+  codeEntered = null;
+  return acceptedCodeHash;
 }
 
 /** Child processes get the user's environment plus ours; our tools come first on PATH. */
@@ -209,9 +234,8 @@ async function checkAccess(
   const status = accessStatus({
     now,
     lastSeenAt: store.lastSeenAt,
-    expiresAt: BUILD_EXPIRES_AT,
     acceptedCodeHash: store.acceptedCodeHash,
-    expectedCodeHash: ACCESS_CODE_SHA256,
+    codes: ACCESS_CODES,
   });
   const next = { ...store, lastSeenAt: effectiveNow(now, store.lastSeenAt).toISOString() };
   if (paths !== undefined) await saveStore(paths.root, next);
@@ -233,12 +257,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.gateGetState, (event) => (fromGate(event.sender) ? gate?.current() : null));
   ipcMain.handle(IPC.gateSubmitCode, (event, raw: unknown) => {
     if (!fromGate(event.sender)) return false;
-    const code = submittedCodeSchema.safeParse(raw);
-    if (!code.success || !isCorrectCode(code.data, ACCESS_CODE_SHA256)) {
-      log?.warn("A wrong access code was entered");
+    const typed = submittedCodeSchema.safeParse(raw);
+    const code = typed.success ? acceptCode(typed.data, ACCESS_CODES, new Date()) : null;
+    if (code === null) {
+      log?.warn("A wrong or expired access code was entered");
       return false;
     }
-    codeEntered?.();
+    codeEntered?.(code.sha256);
     return true;
   });
   ipcMain.on(IPC.gateOpenLogs, (event) => {
@@ -276,14 +301,6 @@ async function boot(): Promise<void> {
     packaged: app.isPackaged,
   });
 
-  installMenu(
-    {
-      openDownloads: () => void openDownloads(undefined),
-      openLogs: () => void shell.openPath(appPaths.logsDir),
-      about: `Gatecrusher ${app.getVersion()}, test build until ${BUILD_EXPIRES_AT.slice(0, 10)}`,
-    },
-    process.platform,
-  );
   // The app asks for nothing: no camera, notifications, location or anything else.
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, decide) =>
     decide(false),
@@ -294,20 +311,28 @@ async function boot(): Promise<void> {
   );
   const { status } = checked;
   let { store } = checked;
-  if (status.kind === "expired") {
-    mainLog.info("This build has expired");
-    showGate(expiredState());
-    return;
-  }
-  if (status.kind === "needs_code") {
-    showGate({ mode: "code", contact: OWNER_CONTACT });
-    await new Promise<void>((resolve) => {
-      codeEntered = resolve;
-    });
-    codeEntered = null;
-    store = { ...store, acceptedCodeHash: ACCESS_CODE_SHA256 };
+  // Installed again after a code is entered, so the Help menu names that code's end date.
+  const menu = (): void =>
+    installMenu(
+      {
+        openDownloads: () => void openDownloads(undefined),
+        openLogs: () => void shell.openPath(appPaths.logsDir),
+        about: aboutLine(store),
+      },
+      process.platform,
+    );
+  menu();
+  if (status.kind !== "ok") {
+    if (status.kind === "expired") mainLog.info("The access code in use has expired");
+    const acceptedCodeHash = await askForCode(
+      status.kind === "expired"
+        ? expiredState(status.expiredAt)
+        : { mode: "code", contact: OWNER_CONTACT },
+    );
+    store = { ...store, acceptedCodeHash };
     await saveStore(appPaths.root, store);
     mainLog.info("Access code accepted");
+    menu();
   }
 
   showGate({ mode: "starting", step: "Starting…" });
@@ -325,16 +350,22 @@ async function boot(): Promise<void> {
     mainWindow = null;
   });
 
-  // A copy left open past the end date stops too.
+  // A copy left open past its code's end date stops too and asks for a new code; once
+  // one is entered the app starts over.
   const timer = setInterval(() => {
     void checkAccess(store).then(async (checked) => {
       store = checked.store;
       if (checked.status.kind !== "expired") return;
       clearInterval(timer);
-      mainLog.info("This build expired while running");
-      showGate(expiredState());
+      mainLog.info("The access code in use expired while running");
+      const asking = askForCode(expiredState(checked.status.expiredAt));
       mainWindow?.close();
       await stopServices();
+      const acceptedCodeHash = await asking;
+      await saveStore(appPaths.root, { ...store, acceptedCodeHash });
+      mainLog.info("Access code accepted; restarting");
+      app.relaunch();
+      app.quit();
     });
   }, ACCESS_CHECK_INTERVAL_MS);
 }

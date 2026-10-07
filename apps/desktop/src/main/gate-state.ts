@@ -2,12 +2,13 @@ import { z } from "zod";
 
 /** What the small gate window shows before (or instead of) the app. */
 export const gateStateSchema = z.discriminatedUnion("mode", [
-  /** First start of this build: ask for the access code. */
-  z.object({ mode: z.literal("code"), contact: z.string() }),
+  /**
+   * Ask for an access code: on the first start of this build, or when the code this
+   * machine entered has reached its end date (`expiredAt` is then set).
+   */
+  z.object({ mode: z.literal("code"), contact: z.string(), expiredAt: z.string().optional() }),
   /** Code accepted; services are starting. */
   z.object({ mode: z.literal("starting"), step: z.string() }),
-  /** The build is past its end date. */
-  z.object({ mode: z.literal("expired"), expiredAt: z.string(), contact: z.string() }),
   /** Something stopped the app from starting. */
   z.object({ mode: z.literal("error"), message: z.string() }),
 ]);

@@ -30,29 +30,36 @@ Where a friend's data lives (kept when uninstalling):
 **File → Open Downloads Folder** and the playlist page's **Open folder** button open the
 downloads. **File → Open Log Files** opens the logs, which hold no passwords or tokens.
 
-## Access code and end date
+## Access codes and end dates
 
-Set in [apps/desktop/src/main/build-config.ts](../apps/desktop/src/main/build-config.ts):
+Set in [apps/desktop/src/main/build-config.ts](../apps/desktop/src/main/build-config.ts).
+`ACCESS_CODES` lists the codes a build accepts, each as the SHA-256 of the code
+(lower-cased and trimmed) with its own end date, or `null` for a code that never ends.
+Current codes:
 
-- `ACCESS_CODE_SHA256`: the SHA-256 of the code, lower-cased and trimmed. Current code:
-  **gatecrusher**. Asked once per machine per build; a build with a new code asks again.
-- `BUILD_EXPIRES_AT`: **2026-12-07 23:59:59 UTC**. After that the app shows "This test
-  build has ended" and asks for the new installer. A copy left open stops too (checked
-  every 15 minutes). Winding the clock back does not help: the app remembers the latest
-  time it has seen.
+- **gatecrusher**: the test code for friends, until **2026-12-07 23:59:59 UTC**.
+- **pookiebear**: the owner's permanent code.
+
+A code is asked for once per machine per build; a build that drops the code a machine
+entered asks again. After a code's end date the app shows "Your code stopped working on
+…" and asks for a new one on the same screen, so a friend can be given a different code
+without a new installer. A copy left open stops too (checked every 15 minutes), asks for
+a code, and restarts once one is entered. Winding the clock back does not help: the app
+remembers the latest time it has seen.
 
 This is a soft lock. It runs on the friend's machine, so someone determined can get round
 it; it stops casual use after the test period. A real paywall needs a server that issues
 and checks licences.
 
-To hand out a new build, change the code and/or date:
+To add or change a code:
 
 ```sh
 node -e "console.log(require('crypto').createHash('sha256').update('new code'.trim().toLowerCase()).digest('hex'))"
 ```
 
-Paste the hash and the new date into `build-config.ts`, update the test in
-`access.test.ts` (it pins both), bump `version` in `apps/desktop/package.json`, and build.
+Paste the hash and its end date into `build-config.ts`, update the test in
+`access.test.ts` (it pins the list), bump `version` in `apps/desktop/package.json`, and
+build.
 
 ## Building
 

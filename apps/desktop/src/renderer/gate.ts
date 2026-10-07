@@ -19,7 +19,7 @@ function element<T extends HTMLElement>(id: string): T {
   return found as T;
 }
 
-const sections = ["code", "starting", "expired", "error"] as const;
+const sections = ["code", "starting", "error"] as const;
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -32,16 +32,18 @@ function formatDate(iso: string): string {
 function render(state: GateState): void {
   for (const id of sections) element(id).hidden = id !== state.mode;
   switch (state.mode) {
-    case "code":
+    case "code": {
+      const expiredAt = state.expiredAt;
+      element("code-intro").hidden = expiredAt !== undefined;
+      element("code-expired").hidden = expiredAt === undefined;
       element("code-contact").textContent = state.contact;
+      element("expired-contact").textContent = state.contact;
+      element("expired-at").textContent = expiredAt === undefined ? "" : formatDate(expiredAt);
       element<HTMLInputElement>("code-input").focus();
       break;
+    }
     case "starting":
       element("step").textContent = state.step;
-      break;
-    case "expired":
-      element("expired-at").textContent = formatDate(state.expiredAt);
-      element("expired-contact").textContent = state.contact;
       break;
     case "error":
       element("error-detail").textContent = state.message;

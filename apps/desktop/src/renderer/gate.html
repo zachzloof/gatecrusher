@@ -163,7 +163,14 @@
 
     <section id="code" hidden>
       <h1>Enter your access code</h1>
-      <p>This is a private test build. <span id="code-contact"></span> gave you the code.</p>
+      <p id="code-intro">
+        This is a private test build. <span id="code-contact"></span> gave you the code.
+      </p>
+      <p id="code-expired" hidden>
+        Your code stopped working on <span id="expired-at"></span>. Ask
+        <span id="expired-contact"></span> for a new one. Your downloads are still on this
+        computer.
+      </p>
       <form id="code-form" novalidate>
         <label for="code-input">Access code</label>
         <input
@@ -186,18 +193,6 @@
       <p class="status" role="status">
         <span class="dot" aria-hidden="true"></span><span id="step"></span>
       </p>
-    </section>
-
-    <section id="expired" hidden>
-      <h1>This test build has ended</h1>
-      <p>
-        It stopped working on <span id="expired-at"></span>. Ask
-        <span id="expired-contact"></span> for the new installer.
-      </p>
-      <p>Your downloads are still on this computer.</p>
-      <div class="row">
-        <button type="button" data-action="quit">Quit</button>
-      </div>
     </section>
 
     <section id="error" hidden>

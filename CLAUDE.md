@@ -55,7 +55,7 @@ These are not negotiable. If a task seems to require breaking one, stop and ask.
 - **Monorepo:** pnpm workspaces + Turborepo. TypeScript `strict` everywhere.
 - **`apps/web`** — Next.js (App Router, Tailwind, shadcn/ui). Serves the UI and the API route handlers (including the SSE endpoint).
 - **`apps/worker`** — Node service that takes queued jobs from Postgres one at a time (yt-dlp today; Playwright, headed, persistent profile, in the paused browser mode).
-- **`apps/desktop`** — Electron shell and installer (electron-builder): starts a private Postgres (embedded-postgres binaries), the web standalone server and the worker as child processes, behind an access code and a build end date. Bundled with esbuild.
+- **`apps/desktop`** — Electron shell and installer (electron-builder): starts a private Postgres (embedded-postgres binaries), the web standalone server and the worker as child processes, behind access codes, each with its own end date. Bundled with esbuild.
 - **`packages/db`** — Drizzle ORM + Postgres schema and migrations.
 - **`packages/core`** — shared types, zod schemas, gate classifier, adapter interfaces, result types.
 - **`packages/gates`** — gate adapters + the AI browser agent.
