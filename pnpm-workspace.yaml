@@ -6,5 +6,7 @@ packages:
 allowBuilds:
   # Native binary used by Vite (Vitest) and drizzle-kit.
   esbuild: true
-  # Optional native speed-up for BullMQ's msgpack; the JS fallback is fine.
-  msgpackr-extract: false
+  # Downloads the Electron binary for the desktop app.
+  electron: true
+  # Squirrel.Windows support in electron-builder; the installer is NSIS, so unused.
+  electron-winstaller: false

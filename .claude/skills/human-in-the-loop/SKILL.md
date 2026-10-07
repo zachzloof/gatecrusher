@@ -50,11 +50,11 @@ The `human_requests` row mirrors this plus `status` (`OPEN` | `CONTINUED` | `GAV
 
 ## How parking works without blocking the queue
 
-Concurrency is 1 and must stay 1, so a paused job cannot sit inside the BullMQ processor waiting. Instead:
+Concurrency is 1 and must stay 1, so a paused job cannot sit inside the worker's job loop waiting. (The queue is the `jobs` table: the loop takes the oldest `QUEUED` job, oldest run first, then playlist order.) Instead:
 
-1. A step returns `needs_human`. The runner takes a screenshot, then in **one DB transaction**: persists `stepIndex` + adapter `state`, inserts the `human_requests` row, sets the job to `WAITING_FOR_HUMAN`, inserts the event. Then publishes the event on Redis pub/sub.
+1. A step returns `needs_human`. The runner takes a screenshot, then in **one DB transaction**: persists `stepIndex` + adapter `state`, inserts the `human_requests` row, sets the job to `WAITING_FOR_HUMAN`, inserts the event.
 2. The runner hands the Playwright `Page` to the **parked-page registry** (in-memory `Map<jobId, Page>` in the worker). The page — its own tab in the persistent context — is left open and untouched.
-3. The BullMQ processor **returns normally** with outcome `parked`. The slot is free; the next job opens a new tab.
+3. The job **returns normally** with outcome `parked`. The loop is free; the next job opens a new tab.
 
 Rules for the registry:
 
@@ -65,10 +65,10 @@ Rules for the registry:
 
 ## How Continue and Give up reach the worker
 
-Web and worker share only Postgres and Redis.
+Web and worker share only Postgres.
 
-- **Continue:** `POST /api/human-requests/:id/continue` -> validate -> in a transaction mark the request `CONTINUED` and the job `QUEUED` -> enqueue a BullMQ `resume` job `{ jobId, humanRequestId }` with **higher priority** than fresh jobs (so a human's action is honoured next, after the currently running job finishes). Idempotent: a second click on a non-`OPEN` request is a no-op returning the current state.
-- **Give up:** `POST /api/human-requests/:id/give-up` with optional reason -> job `MANUAL` (`user_gave_up`, with the gate link) -> enqueue a small `release` job so the worker closes the parked tab.
+- **Continue:** `POST /api/human-requests/:id/continue` -> validate -> in a transaction mark the request `CONTINUED` and the job `QUEUED`. The job keeps its original run, so the loop takes it ahead of tracks queued after it (a human's action is honoured soon, after the currently running job finishes). Idempotent: a second click on a non-`OPEN` request is a no-op returning the current state.
+- **Give up:** `POST /api/human-requests/:id/give-up` with optional reason -> job `MANUAL` (`user_gave_up`, with the gate link). The worker closes parked tabs whose job is no longer `WAITING_FOR_HUMAN`.
 - **Resume processing in the worker:**
   1. Look up the page in the registry.
   2. **Page alive:** run `checkBlockers()`. Still blocked -> new screenshot, new `human_requests` row (`attempt + 1`, old one `SUPERSEDED`), park again. Clear -> call the **same step** again from the persisted `stepIndex` with persisted `state`.
@@ -78,7 +78,7 @@ The user never needs to tell the system *what* they did; Continue just means "lo
 
 ## Live updates to the UI
 
-Worker publishes every event to a Redis channel per run; `GET /api/runs/:id/events` (SSE) subscribes and streams. On connect, the route first replays current state from Postgres, then streams — so a reconnect or refresh is always consistent. Postgres is the source of truth; pub/sub is only a nudge.
+Every event is a row in Postgres, and the UI polls while anything is queued or running. Any live channel added later (SSE) must replay current state from Postgres on connect, so a reconnect or refresh is always consistent. Postgres is the source of truth.
 
 ## Timeouts
 
@@ -93,7 +93,7 @@ On startup the worker reconciles before taking jobs:
 
 - Jobs `RUNNING` in DB (it died mid-step) -> back to `QUEUED` at their persisted `stepIndex`, event `recovered_after_restart`.
 - Jobs `WAITING_FOR_HUMAN` -> stay as they are; their open requests get `sessionAlive=false` (the registry is empty after a restart) and an update event so the card shows "Reopen and retry step".
-- BullMQ stalled-job handling is configured so a job is never double-processed; the processor is idempotent on `(jobId, stepIndex)`.
+- Only one worker runs, and its loop runs one job at a time, so a job is never double-processed; the processor is idempotent on `(jobId, stepIndex)`.
 - Graceful shutdown (SIGINT/SIGTERM): stop taking jobs, let the current step finish or checkpoint, mark sessions lost, close the browser context cleanly so the profile is not corrupted.
 
 ## Tests required when touching this area

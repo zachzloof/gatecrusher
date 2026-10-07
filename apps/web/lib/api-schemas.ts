@@ -23,8 +23,6 @@ export const API_ERROR_CODES = [
   "upstream_failed",
   /** No such row in Gatecrusher's own database. */
   "not_found",
-  /** Redis is unreachable, so nothing can be handed to the worker. */
-  "queue_unavailable",
   /** Downloads need a signed-in SoundCloud account and none is connected. */
   "soundcloud_not_connected",
   /** SoundCloud refused the pasted login token. */
@@ -48,7 +46,6 @@ export type ApiErrorCode = ApiError["error"]["code"];
 export const healthResponseSchema = z.object({
   status: z.enum(["ok", "degraded"]),
   db: z.object({ ok: z.boolean() }),
-  redis: z.object({ ok: z.boolean() }),
   worker: z.object({
     online: z.boolean(),
     lastBeatAt: z.iso.datetime().nullable(),

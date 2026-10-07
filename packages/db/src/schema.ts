@@ -250,3 +250,18 @@ export const soundcloudAccount = pgTable(
   },
   (table) => [check("soundcloud_account_single_row", sql`${table.id} = 1`)],
 );
+
+/**
+ * The worker's heartbeat: rewritten every few seconds while it runs, deleted when it
+ * stops. Web reads it to say whether downloads can make progress. One row at most.
+ */
+export const workerHeartbeat = pgTable(
+  "worker_heartbeat",
+  {
+    id: integer("id").primaryKey().default(1),
+    pid: integer("pid").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    beatAt: timestamp("beat_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [check("worker_heartbeat_single_row", sql`${table.id} = 1`)],
+);

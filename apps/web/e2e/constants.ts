@@ -7,6 +7,3 @@ export const E2E_PORT = 3100;
  * the Settings test asserts never reach the page.
  */
 export const E2E_DATABASE_URL = "postgres://e2e-user:e2e-secret-password@127.0.0.1:1/e2e";
-
-/** A Redis database no worker writes a heartbeat to. */
-export const E2E_REDIS_URL = "redis://127.0.0.1:6379/15";

@@ -1,51 +1,51 @@
-import {
-  WORKER_HEARTBEAT_INTERVAL_MS,
-  WORKER_HEARTBEAT_TTL_SECONDS,
-  type WorkerHeartbeat,
-} from "@gatecrusher/core";
-import type { Redis } from "ioredis";
+import { WORKER_HEARTBEAT_INTERVAL_MS } from "@gatecrusher/core";
+import { clearWorkerHeartbeat, writeWorkerHeartbeat, type Database } from "@gatecrusher/db";
 import type { Logger } from "pino";
 
 export interface HeartbeatOptions {
-  redis: Redis;
-  key: string;
+  db: Database;
   log: Logger;
+  intervalMs?: number;
 }
 
 export interface Heartbeat {
-  /** Stops beating and removes the key so the worker reads as offline immediately. */
+  /** Stops beating and removes the row so the worker reads as offline immediately. */
   stop(): Promise<void>;
 }
 
 /**
- * Refreshes a short-lived Redis key while the worker is alive. Web reads it to decide
- * whether to show the "worker offline" banner. A failed beat is logged, never thrown:
- * the key's TTL already makes a silent worker read as offline.
+ * Rewrites the heartbeat row while the worker is alive. Web reads it to decide whether
+ * to show the "worker offline" banner. A failed beat is logged, never thrown: a row
+ * that stops changing already reads as offline once it is stale.
  */
-export async function startHeartbeat({ redis, key, log }: HeartbeatOptions): Promise<Heartbeat> {
-  const startedAt = new Date().toISOString();
+export async function startHeartbeat({
+  db,
+  log,
+  intervalMs,
+}: HeartbeatOptions): Promise<Heartbeat> {
+  const startedAt = new Date();
 
   const beat = async (): Promise<void> => {
-    const heartbeat: WorkerHeartbeat = {
-      pid: process.pid,
-      startedAt,
-      beatAt: new Date().toISOString(),
-    };
     try {
-      await redis.set(key, JSON.stringify(heartbeat), "EX", WORKER_HEARTBEAT_TTL_SECONDS);
+      await writeWorkerHeartbeat(db, { pid: process.pid, startedAt, beatAt: new Date() });
     } catch (error) {
       log.warn({ err: error }, "Worker heartbeat could not be written");
     }
   };
 
-  await beat();
-  const timer = setInterval(() => void beat(), WORKER_HEARTBEAT_INTERVAL_MS);
+  let inFlight = beat();
+  await inFlight;
+  const timer = setInterval(() => {
+    inFlight = beat();
+  }, intervalMs ?? WORKER_HEARTBEAT_INTERVAL_MS);
 
   return {
     stop: async () => {
       clearInterval(timer);
+      // A beat still being written would otherwise land after the row is removed.
+      await inFlight;
       try {
-        await redis.del(key);
+        await clearWorkerHeartbeat(db, process.pid);
       } catch (error) {
         log.warn({ err: error }, "Worker heartbeat could not be cleared");
       }

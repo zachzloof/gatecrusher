@@ -55,6 +55,7 @@ describe("migrations", () => {
       "runs",
       "soundcloud_account",
       "tracks",
+      "worker_heartbeat",
     ]);
   });
 

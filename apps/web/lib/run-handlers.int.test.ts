@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   completeJob,
   createDb,
+  nextQueuedJobId,
   parkJob,
   recordStepStarted,
   savePlaylistIngest,
@@ -32,8 +33,8 @@ import {
   type RunHandlerDeps,
 } from "./run-handlers";
 
-// Real Postgres (a throwaway database) and a real data dir (a temp one); the queue is a
-// fake that records what it was handed.
+// Real Postgres (a throwaway database) and a real data dir (a temp one). The queue is the
+// jobs table, so "handed to the worker" means a QUEUED job row.
 let database: TestDatabase;
 let db: Database;
 let dataDir: string;
@@ -61,27 +62,14 @@ beforeEach(async () => {
 
 const silentLog = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
-interface FakeQueueOptions {
-  ready?: boolean;
-  failEnqueue?: boolean;
+function depsWith(database_: Database = db) {
+  const deps: RunHandlerDeps = { db: database_, dataDir, log: silentLog };
+  return { deps };
 }
 
-function depsWith(options: FakeQueueOptions = {}, database_: Database = db) {
-  const enqueued: string[][] = [];
-  const deps: RunHandlerDeps = {
-    db: database_,
-    dataDir,
-    log: silentLog,
-    queue: {
-      isReady: () => Promise.resolve(options.ready ?? true),
-      enqueue: (jobIds) => {
-        if (options.failEnqueue === true) return Promise.reject(new Error("Connection is closed."));
-        enqueued.push([...jobIds]);
-        return Promise.resolve();
-      },
-    },
-  };
-  return { deps, enqueued };
+async function statusOf(jobId: string) {
+  const jobs = await db.select().from(schema.jobs);
+  return jobs.find((job) => job.id === jobId)?.status;
 }
 
 function track(id: string, overrides: Partial<ClassifiedTrack> = {}): ClassifiedTrack {
@@ -141,7 +129,7 @@ async function errorOf(response: Response) {
 describe("POST /api/playlists/:id/runs", () => {
   it("queues one job per track, native or not, in playlist order, for the worker", async () => {
     const playlistId = await seedPlaylist();
-    const { deps, enqueued } = depsWith();
+    const { deps } = depsWith();
 
     const response = await handleStartRun(playlistId, deps);
 
@@ -149,13 +137,13 @@ describe("POST /api/playlists/:id/runs", () => {
     const body = runResponseSchema.parse(await response.json());
     expect(body).toMatchObject({ queued: 3, resumed: 0, alreadyDownloaded: 0, alreadyActive: 0 });
     expect(body.runId).not.toBeNull();
-    expect(enqueued).toEqual([await jobIdsInPlaylistOrder()]);
     expect(await db.$count(schema.jobs)).toBe(3);
+    expect(await nextQueuedJobId(db)).toBe((await jobIdsInPlaylistOrder())[0]);
   });
 
-  it("creates nothing new when clicked again, and hands the waiting jobs over again", async () => {
+  it("creates nothing new when clicked again; the queued jobs stay queued", async () => {
     const playlistId = await seedPlaylist();
-    const { deps, enqueued } = depsWith();
+    const { deps } = depsWith();
     await handleStartRun(playlistId, deps);
 
     const response = await handleStartRun(playlistId, deps);
@@ -168,13 +156,12 @@ describe("POST /api/playlists/:id/runs", () => {
       alreadyActive: 3,
     });
     expect(await db.$count(schema.jobs)).toBe(3);
-    expect(enqueued).toHaveLength(2);
-    expect([...(enqueued[1] ?? [])].sort()).toEqual([...(enqueued[0] ?? [])].sort());
+    for (const jobId of await jobIdsInPlaylistOrder()) expect(await statusOf(jobId)).toBe("QUEUED");
   });
 
   it("skips downloaded tracks and retries paused ones", async () => {
     const playlistId = await seedPlaylist();
-    const { deps, enqueued } = depsWith();
+    const { deps } = depsWith();
     await handleStartRun(playlistId, deps);
     const [downloadedId, pausedId, queuedId] = await jobIdsInPlaylistOrder();
     if (downloadedId === undefined || pausedId === undefined || queuedId === undefined) {
@@ -214,13 +201,14 @@ describe("POST /api/playlists/:id/runs", () => {
       alreadyDownloaded: 1,
       alreadyActive: 1,
     });
-    expect(enqueued.at(-1)).toEqual([pausedId, queuedId]);
+    expect(await statusOf(pausedId)).toBe("QUEUED");
+    expect(await statusOf(queuedId)).toBe("QUEUED");
   });
 
   it("starts nothing, and says what to do, when no SoundCloud account is connected", async () => {
     const playlistId = await seedPlaylist();
     await db.delete(schema.soundcloudAccount);
-    const { deps, enqueued } = depsWith();
+    const { deps } = depsWith();
 
     const response = await handleStartRun(playlistId, deps);
 
@@ -228,48 +216,20 @@ describe("POST /api/playlists/:id/runs", () => {
     const error = await errorOf(response);
     expect(error.code).toBe("soundcloud_not_connected");
     expect(error.message).toContain("Connect a SoundCloud account first");
-    expect(enqueued).toEqual([]);
     expect(await db.$count(schema.jobs)).toBe(0);
     expect(await db.$count(schema.runs)).toBe(0);
-  });
-
-  it("starts nothing when Redis is unreachable", async () => {
-    const playlistId = await seedPlaylist();
-
-    const response = await handleStartRun(playlistId, depsWith({ ready: false }).deps);
-
-    expect(response.status).toBe(503);
-    expect(await errorOf(response)).toMatchObject({ code: "queue_unavailable" });
-    expect(await db.$count(schema.jobs)).toBe(0);
-    expect(await db.$count(schema.runs)).toBe(0);
-  });
-
-  it("says so when the hand-over fails, and the next click hands the same jobs over", async () => {
-    const playlistId = await seedPlaylist();
-
-    const failed = await handleStartRun(playlistId, depsWith({ failEnqueue: true }).deps);
-
-    expect(failed.status).toBe(503);
-    expect((await errorOf(failed)).message).toContain("Click Download tracks again");
-    expect(await db.$count(schema.jobs)).toBe(3);
-
-    const { deps, enqueued } = depsWith();
-    const retried = await handleStartRun(playlistId, deps);
-    expect(retried.status).toBe(202);
-    expect([...(enqueued[0] ?? [])].sort()).toEqual((await jobIdsInPlaylistOrder()).sort());
-    expect(await db.$count(schema.jobs)).toBe(3);
   });
 
   it.each(["00000000-0000-4000-8000-000000000000", "not-a-uuid", "1; drop table jobs"])(
-    "answers 404 for playlist %s and enqueues nothing",
+    "answers 404 for playlist %s and queues nothing",
     async (id) => {
-      const { deps, enqueued } = depsWith();
+      const { deps } = depsWith();
 
       const response = await handleStartRun(id, deps);
 
       expect(response.status).toBe(404);
       expect((await errorOf(response)).code).toBe("not_found");
-      expect(enqueued).toEqual([]);
+      expect(await db.$count(schema.jobs)).toBe(0);
     },
   );
 
@@ -278,7 +238,7 @@ describe("POST /api/playlists/:id/runs", () => {
     try {
       const response = await handleStartRun(
         "00000000-0000-4000-8000-000000000000",
-        depsWith({}, dead.db).deps,
+        depsWith(dead.db).deps,
       );
 
       expect(response.status).toBe(500);
@@ -533,7 +493,7 @@ describe("GET /api/screenshots/*", () => {
     // A dead database proves the lookup is never reached for a malformed path.
     const dead = createDb("postgres://nobody:nothing@127.0.0.1:1/nowhere", { max: 1 });
     try {
-      const response = await handleScreenshot(segments, depsWith({}, dead.db).deps);
+      const response = await handleScreenshot(segments, depsWith(dead.db).deps);
 
       expect(response.status).toBe(404);
     } finally {

@@ -3,6 +3,7 @@
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { healthResponseSchema, type HealthResponse } from "@/lib/api-schemas";
+import { useDesktop } from "@/lib/desktop";
 import { describeProblem, type SystemProblem } from "@/lib/system-status";
 
 const POLL_INTERVAL_MS = 10_000;
@@ -21,19 +22,20 @@ async function fetchHealth(signal: AbortSignal): Promise<HealthResponse | null> 
 }
 
 /**
- * Thin banner at the top of every page while Postgres, Redis or the worker is not
+ * Thin banner at the top of every page while Postgres or the worker is not
  * available. Renders nothing until the first check has answered, and nothing when
  * everything is up.
  */
 export function SystemStatusBanner() {
   const [problem, setProblem] = useState<SystemProblem | null>(null);
+  const desktop = useDesktop() !== null;
 
   useEffect(() => {
     const controller = new AbortController();
 
     const check = async (): Promise<void> => {
       const health = await fetchHealth(controller.signal);
-      if (!controller.signal.aborted) setProblem(describeProblem(health));
+      if (!controller.signal.aborted) setProblem(describeProblem(health, { desktop }));
     };
 
     void check();
@@ -42,7 +44,7 @@ export function SystemStatusBanner() {
       controller.abort();
       clearInterval(timer);
     };
-  }, []);
+  }, [desktop]);
 
   return (
     <div role="status" aria-live="polite">

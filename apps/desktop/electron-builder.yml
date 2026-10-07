@@ -1,0 +1,57 @@
+# Installer config. Everything the app runs is pre-built by scripts/bundle.mjs, so the
+# app itself carries no node_modules: dist/ goes into app.asar, stage/ into resources/.
+appId: com.zachzloof.gatecrusher
+productName: Gatecrusher
+copyright: Private test build. Not for redistribution.
+artifactName: Gatecrusher-${version}-${os}-${arch}.${ext}
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - package.json
+asar: true
+# Everything is bundled into dist/ and stage/; the package has no runtime dependencies.
+npmRebuild: false
+nodeGypRebuild: false
+
+extraResources:
+  - from: stage
+    to: .
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.png
+  # No code-signing certificate: Windows shows "Windows protected your PC" on first run
+  # (More info -> Run anyway).
+  signAndEditExecutable: true
+
+nsis:
+  # A per-user install: no administrator prompt, lives in %LOCALAPPDATA%\Programs.
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Gatecrusher
+  # Downloads and the database are kept when uninstalling.
+  deleteAppDataOnUninstall: false
+
+mac:
+  target:
+    - target: dmg
+  category: public.app-category.music
+  icon: build/icon.png
+  # No Apple Developer ID: the app is signed ad hoc, which Apple Silicon requires, and
+  # is not notarised. First open: right-click -> Open (see docs/DESKTOP.md).
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+dmg:
+  title: Gatecrusher ${version}

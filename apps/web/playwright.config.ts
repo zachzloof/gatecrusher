@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { E2E_DATABASE_URL, E2E_PORT, E2E_REDIS_URL } from "./e2e/constants";
+import { E2E_DATABASE_URL, E2E_PORT } from "./e2e/constants";
 
 const chrome = devices["Desktop Chrome"];
 
@@ -25,7 +25,6 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       DATABASE_URL: E2E_DATABASE_URL,
-      REDIS_URL: E2E_REDIS_URL,
       LOG_LEVEL: "silent",
     },
   },

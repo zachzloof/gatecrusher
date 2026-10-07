@@ -1,6 +1,6 @@
 # Architecture
 
-Gatecrusher is a pnpm + Turborepo monorepo. The web app and its API run in Docker alongside Postgres and Redis; the worker runs natively on the host so its headed browser window is visible to the user.
+Gatecrusher is a pnpm + Turborepo monorepo. The web app and its API run in Docker alongside Postgres (or natively, day to day); the worker runs natively on the host so its headed browser window is visible to the user. Postgres is the only service: it is also the job queue. The desktop app (`apps/desktop`) runs the same pieces inside one installer: see [DESKTOP.md](DESKTOP.md).
 
 ## System overview
 
@@ -14,13 +14,12 @@ flowchart LR
             api[API route handlers<br/>zod-validated]
             sse[SSE endpoint<br/>/api/runs/:id/events]
         end
-        pg[(Postgres<br/>playlists, tracks, runs, jobs,<br/>events, downloads, human_requests)]
-        redis[(Redis<br/>BullMQ queue + pub/sub)]
+        pg[(Postgres<br/>playlists, tracks, runs, jobs = the queue,<br/>events, downloads, human_requests,<br/>worker_heartbeat)]
     end
 
     subgraph host[Host machine - native]
         subgraph worker[apps/worker - Node]
-            proc[BullMQ processor<br/>concurrency 1, random delays]
+            proc[Job loop<br/>polls QUEUED jobs, one at a time, random delays]
             runner[Step runner<br/>checkpoint after every step]
             parked[Parked-page registry<br/>tabs left open for the human]
         end
@@ -43,8 +42,8 @@ flowchart LR
     ui --> api
     api -->|ingest + classify| sc
     api -->|read / write| pg
-    api -->|enqueue track jobs| redis
-    redis -->|job| proc
+    api -->|queue track jobs: QUEUED rows| pg
+    pg -->|next queued job| proc
     proc --> runner
     runner --> registry
     registry --> native & hyp & other & agent
@@ -54,8 +53,7 @@ flowchart LR
     browser -->|verified download| fs
     runner -->|screenshots| fs
     runner -->|events, status, checkpoints| pg
-    runner -->|publish event| redis
-    redis -->|pub/sub| sse
+    pg -->|events, polled| sse
     sse -->|live status| ui
 
     %% needs_human loop
@@ -63,7 +61,7 @@ flowchart LR
     ui -. Needs you card: screenshot + instruction .-> user
     user -. acts in the real browser window .-> browser
     user -. Continue / Give up .-> ui
-    api -. resume or release job, high priority .-> redis
+    api -. resume or release job: back to QUEUED .-> pg
     parked -. same page, same step .-> runner
 ```
 
@@ -74,7 +72,6 @@ sequenceDiagram
     actor U as User
     participant UI as Web UI
     participant API as API routes
-    participant Q as Redis / BullMQ
     participant W as Worker
     participant B as Browser tab
     participant DB as Postgres
@@ -83,17 +80,15 @@ sequenceDiagram
     W->>B: checkBlockers()
     B-->>W: captcha iframe present
     W->>DB: tx: checkpoint step N, human_request OPEN,<br/>job WAITING_FOR_HUMAN, needs_human event
-    W->>Q: publish event
-    Note over W,B: page parked, left open.<br/>Processor returns - queue slot is free.
-    Q-->>UI: SSE needs_human
+    Note over W,B: page parked, left open.<br/>The job loop moves on - the slot is free.
+    DB-->>UI: needs_human (UI polls)
     UI-->>U: Needs you card (screenshot, instruction)
     W->>B: next track runs in a new tab
     U->>B: solves captcha in the real window
     U->>UI: Continue
     UI->>API: POST /human-requests/:id/continue
     API->>DB: request CONTINUED, job QUEUED
-    API->>Q: enqueue resume (high priority)
-    Q->>W: resume job
+    DB->>W: job loop picks the job up (oldest run first)
     W->>B: checkBlockers() on the parked page
     alt blocker cleared
         W->>B: re-enter step N, continue to the end
@@ -112,7 +107,8 @@ Details, timeouts and restart behaviour: `.claude/skills/human-in-the-loop/SKILL
 | Package | Owns | Must not |
 | --- | --- | --- |
 | `apps/web` | UI, API route handlers, SSE, CSV export, enqueueing | Drive a browser; contain gate logic |
-| `apps/worker` | BullMQ processors, browser lifecycle, step runner wiring, parked pages, download storage, startup reconciliation | Serve HTTP to the UI |
+| `apps/worker` | The job loop, the heartbeat, browser lifecycle, step runner wiring, parked pages, download storage, startup reconciliation | Serve HTTP to the UI |
+| `apps/desktop` | The Electron shell: access code and end date, private Postgres, starting web and worker, the installer | Contain app logic: it only starts and stops the other pieces |
 | `packages/db` | Drizzle schema, migrations, repository functions | Contain business rules |
 | `packages/core` | Types, zod schemas, classifier, `GateAdapter` interfaces, result types, job state machine | Import any other workspace package or do I/O |
 | `packages/gates` | Adapters, blocker detection, step runner, AI agent | Import `db` or the queue — it reports via `GateContext` |
@@ -127,7 +123,7 @@ Details, timeouts and restart behaviour: `.claude/skills/human-in-the-loop/SKILL
 - **downloads** — file path, size, MIME, kind (`audio` | `archive`), checksum, verified-at; unique per track.
 - **human_requests** — reason, description, screenshot, page URL, status, attempt, session-alive flag, resolution.
 
-Postgres is the source of truth. Redis carries jobs and change notifications only; the UI can always rebuild its view from Postgres.
+Postgres is the source of truth and the queue: the worker takes the oldest `QUEUED` job (oldest run first, then playlist order), and at start-up first re-runs any job a dead worker left `RUNNING`. It rewrites a one-row `worker_heartbeat` every 5 s; web treats a heartbeat older than 15 s as "worker offline".
 
 ## Job lifecycle
 
@@ -170,7 +166,8 @@ A download is written under a temporary name (`.partial-<uuid>`) and only rename
 
 ## Deployment shape
 
-- **Development:** `docker compose up` -> Postgres and Redis only. Web runs natively with `pnpm dev` (fast reload, direct access to `data/`).
-- **Production:** `docker compose --profile web up` -> Postgres, Redis, and the built web image, with `data/screenshots` mounted read-only.
-- `pnpm --filter @gatecrusher/worker start` on the host -> worker + visible browser, connecting to the Compose-published Postgres and Redis ports on localhost.
+- **Development:** `docker compose up` -> Postgres only. Web runs natively with `pnpm dev` (fast reload, direct access to `data/`).
+- **Production:** `docker compose --profile web up` -> Postgres and the built web image, with `data/screenshots` mounted read-only.
+- `pnpm --filter @gatecrusher/worker start` on the host -> worker + visible browser, connecting to the Compose-published Postgres port on localhost.
+- **Desktop:** one installer per platform. The Electron main process starts a private Postgres on a free loopback port, applies migrations, then runs the Next.js standalone server and the worker as Electron utility processes. See [DESKTOP.md](DESKTOP.md).
 - Everything is expected to run on one machine the user controls. The web UI is intended for local/LAN use.

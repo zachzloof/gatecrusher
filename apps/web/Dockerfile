@@ -7,9 +7,12 @@ WORKDIR /app
 
 # --- deps: install from the lockfile, cached until a manifest changes ----------------
 FROM base AS deps
+# The desktop app is in the lockfile but never built here: skip Electron's download.
+ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
+COPY apps/desktop/package.json apps/desktop/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/gates/package.json packages/gates/

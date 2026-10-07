@@ -16,7 +16,7 @@ export type StartPlaylistRunResult =
       newJobIds: string[];
       /** Jobs that were waiting for the human and are queued again, at their checkpoint. */
       resumedJobIds: string[];
-      /** Jobs that were already queued. Handing them to the queue again is harmless. */
+      /** Jobs that were already queued; they stay as they are. */
       queuedJobIds: string[];
       /** Tracks skipped because they already have a verified download. */
       alreadyDownloaded: number;

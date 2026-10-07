@@ -5,7 +5,6 @@ import { getEnv } from "./env";
 import { ingestPlaylist } from "./ingest";
 import { getLogger } from "./logger";
 import type { HandlerDeps } from "./playlist-handlers";
-import { trackQueue } from "./queue";
 import type { RunHandlerDeps } from "./run-handlers";
 import { fetchPlaylistFromApiV2, verifySoundcloudToken } from "./soundcloud/api-v2";
 import { createMemoryClientIdCache, type ClientIdCache } from "./soundcloud/client-id";
@@ -55,11 +54,10 @@ export function getAccountHandlerDeps(): AccountHandlerDeps {
   };
 }
 
-/** The real dependencies of the run and screenshot routes: Postgres, the queue, the data dir. */
+/** The real dependencies of the run and screenshot routes: Postgres and the data dir. */
 export function getRunHandlerDeps(): RunHandlerDeps {
   return {
     db: getDb().db,
-    queue: trackQueue,
     dataDir: getDataDir(),
     log: getLogger(),
   };

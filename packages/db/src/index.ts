@@ -3,4 +3,5 @@ export * from "./jobs.ts";
 export * from "./playlists.ts";
 export * from "./runs.ts";
 export * from "./soundcloud-account.ts";
+export * from "./worker.ts";
 export * as schema from "./schema.ts";

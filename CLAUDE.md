@@ -11,6 +11,11 @@
 > **2026-10-06:** SoundCloud only hands the uploader's file to a signed-in account, so
 > yt-dlp now runs with a login token the owner pastes on the **Connect SoundCloud**
 > page (`/connect`). See hard rule 5.
+>
+> **2026-10-07:** Redis is gone: the queue is the `jobs` table. The app also ships as a
+> desktop installer (`apps/desktop`, Electron) for a few friends to test, with its own
+> Postgres, yt-dlp and ffmpeg inside, an access code and an end date. See
+> [docs/DESKTOP.md](docs/DESKTOP.md).
 
 Personal-use web app (single user, built to professional standards). It takes a SoundCloud playlist URL and:
 
@@ -49,15 +54,16 @@ These are not negotiable. If a task seems to require breaking one, stop and ask.
 
 - **Monorepo:** pnpm workspaces + Turborepo. TypeScript `strict` everywhere.
 - **`apps/web`** — Next.js (App Router, Tailwind, shadcn/ui). Serves the UI and the API route handlers (including the SSE endpoint).
-- **`apps/worker`** — Node service running BullMQ jobs with Playwright (headed, persistent profile).
+- **`apps/worker`** — Node service that takes queued jobs from Postgres one at a time (yt-dlp today; Playwright, headed, persistent profile, in the paused browser mode).
+- **`apps/desktop`** — Electron shell and installer (electron-builder): starts a private Postgres (embedded-postgres binaries), the web standalone server and the worker as child processes, behind an access code and a build end date. Bundled with esbuild.
 - **`packages/db`** — Drizzle ORM + Postgres schema and migrations.
 - **`packages/core`** — shared types, zod schemas, gate classifier, adapter interfaces, result types.
 - **`packages/gates`** — gate adapters + the AI browser agent.
-- **Redis** — BullMQ queue and pub/sub for live events.
-- **Docker Compose** — Postgres, Redis, web. **The worker runs natively on the host** so its browser window is visible. The `web` service sits behind the Compose profile `web` and is for the production setup; day to day, `docker compose up` starts only Postgres and Redis and web runs natively with `pnpm dev`.
+- **Postgres is also the queue**: the worker polls the `jobs` table for `QUEUED` rows and keeps its heartbeat in `worker_heartbeat`. There is no Redis or BullMQ (removed 2026-10-07 so the desktop app needs nothing installed).
+- **Docker Compose** — Postgres, web. **The worker runs natively on the host** so its browser window is visible. The `web` service sits behind the Compose profile `web` and is for the production setup; day to day, `docker compose up` starts only Postgres and web runs natively with `pnpm dev`.
 - **Tooling:** ESLint + Prettier, Vitest, Playwright Test, pino.
 
-Dependency direction: `apps/*` -> `packages/gates` -> `packages/core`; `packages/db` -> `packages/core`. `core` imports nothing from the workspace. `gates` never imports `db` — it reports through the `ctx` it is given.
+Dependency direction: `apps/*` -> `packages/gates` -> `packages/core`; `packages/db` -> `packages/core`. `core` imports nothing from the workspace. `gates` never imports `db` — it reports through the `ctx` it is given. `apps/desktop` may import `apps/worker` only through its `embed` entry; nothing imports `apps/desktop`.
 
 ## Architecture principles
 
@@ -65,7 +71,7 @@ Dependency direction: `apps/*` -> `packages/gates` -> `packages/core`; `packages
 - **The AI agent is just another adapter** with the lowest priority in the registry. It gets no special paths through the worker.
 - **Structured events for everything.** Every job writes events (`status`, `step`, `screenshot path`, `error`, `needs_human` details) to Postgres and publishes them so the UI can show live progress.
 - **Verify every download** before marking success: file exists, size above `MIN_DOWNLOAD_BYTES` (default 1 MB), and the content (sniffed from bytes, not the extension) is either audio or a zip archive containing at least one audio entry above the same threshold. Archives are kept as delivered and recorded as `archive` in `downloads`.
-- **State lives in Postgres.** Redis is transport. In-memory state (open pages) is a cache that must be recoverable — see the human-in-the-loop skill.
+- **State lives in Postgres**, the queue included. In-memory state (open pages) is a cache that must be recoverable — see the human-in-the-loop skill.
 
 ## Coding standards
 

@@ -15,7 +15,6 @@ permissions:
 env:
   # Match the service containers below. CI-only throwaway credentials.
   DATABASE_URL: postgres://gatecrusher:gatecrusher@localhost:5432/gatecrusher
-  REDIS_URL: redis://localhost:6379
   NEXT_TELEMETRY_DISABLED: "1"
   TURBO_TELEMETRY_DISABLED: "1"
 
@@ -36,15 +35,6 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U gatecrusher -d gatecrusher"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10

@@ -36,12 +36,13 @@ Real pieces wired together, still offline:
 
 - **Adapters against fixtures:** Playwright library (headless Chromium) + a local fixture server. The server's route guard aborts and fails the test on any non-localhost request. See `gate-adapter` for the required case list, including the captcha-iframe fixture and resume.
 - **Browser agent:** scripted fake Anthropic client + fixtures. See `browser-agent`.
-- **Queue + pause/resume:** real BullMQ against Redis, real Postgres, fake adapter that returns `needs_human` on demand. See `human-in-the-loop` for the case list.
+- **Queue + pause/resume:** the real worker job loop against a throwaway Postgres database, fake adapter that returns `needs_human` on demand. See `human-in-the-loop` for the case list.
+- **Desktop app:** pure logic (access code, end date, paths, Postgres command lines, yt-dlp copy) in Vitest; `pnpm --filter @gatecrusher/desktop smoke` starts the real Electron app from `stage/` (after `bundle`) with a throwaway data folder. Local only.
 - **DB:** migrations apply cleanly to an empty database; repository functions against real Postgres (no mocking Drizzle).
 - **API route handlers:** call handlers with real DB; assert zod-validated responses and error shapes.
 - **SoundCloud ingest:** recorded JSON responses (sanitised, committed under `__fixtures__`) served by a fake fetch; includes the `client_id`-expired path and the yt-dlp fallback (fake process runner with recorded `-J` output).
 
-Postgres and Redis for integration tests come from Docker Compose (`docker compose up -d`, which starts only those two), using a separate test database that is migrated in global setup and truncated between test files.
+Postgres for integration tests comes from Docker Compose (`docker compose up -d`, which starts only Postgres); each test file creates, migrates and drops its own throwaway database.
 
 ### E2E — Playwright Test, `apps/web/e2e`
 
@@ -73,7 +74,7 @@ Anything involving the live sites and the burner account (login script, a real n
 ```sh
 pnpm lint                 # eslint across the workspace
 pnpm typecheck            # tsc --noEmit across the workspace
-pnpm test                 # unit + integration (needs postgres + redis up)
+pnpm test                 # unit + integration (needs postgres up)
 pnpm test:unit            # unit only, no services needed
 pnpm test:e2e             # Playwright UI e2e
 pnpm --filter @gatecrusher/gates test    # one package

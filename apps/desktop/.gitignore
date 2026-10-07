@@ -1,0 +1,5 @@
+# Downloaded by scripts/fetch-binaries.mjs; never committed.
+vendor/
+# Produced by scripts/bundle.mjs and electron-builder.
+stage/
+release/

@@ -48,14 +48,16 @@ The defaults work as they are. Change only what you need:
 Every variable is documented in [.env.example](../.env.example). The **Settings** page
 in the app shows which ones are set (never their values).
 
-## 4. Start Postgres and Redis
+## 4. Start Postgres
 
 ```sh
 docker compose up -d
-docker ps          # both gatecrusher containers should say "healthy" within ~20 s
+docker ps          # the gatecrusher-postgres container should say "healthy" within ~20 s
 ```
 
-Only those two containers start; web and the worker run natively.
+Only Postgres starts; web and the worker run natively. Postgres also holds the job queue.
+Coming from a checkout that still had Redis? `docker compose up -d --remove-orphans`
+removes the old Redis container.
 
 ## 5. Create the tables
 
@@ -76,8 +78,7 @@ pnpm --filter @gatecrusher/worker start   # worker; logs "nativeDownloadMode": "
 ```
 
 Open http://127.0.0.1:3000. The banner at the top disappears once the worker's
-heartbeat arrives (a few seconds). If it says Postgres or Redis is down, go back to
-step 4.
+heartbeat arrives (a few seconds). If it says Postgres is down, go back to step 4.
 
 ## 7. Connect SoundCloud
 
@@ -116,7 +117,7 @@ warning in an ordinary browser; wait for that to clear first.
 | --- | --- |
 | Stop everything | Ctrl+C in both terminals; `docker compose stop` |
 | Start again | `docker compose up -d`, then the two commands from step 6 |
-| Run the checks | `pnpm lint && pnpm typecheck && pnpm test` (needs the containers up) |
+| Run the checks | `pnpm lint && pnpm typecheck && pnpm test` (needs the Postgres container up) |
 | UI e2e | `pnpm test:e2e` (first time: `pnpm --filter @gatecrusher/web exec playwright install chromium`) |
 | Update yt-dlp | `py -m pip install --upgrade yt-dlp` — SoundCloud changes break old versions |
 

@@ -3,7 +3,6 @@ import { ENV_VAR_DOCS, isEnvVarSet, parseEnv, webEnvSchema, workerEnvSchema } fr
 
 const valid = {
   DATABASE_URL: "postgres://user:hunter2@localhost:5432/gatecrusher",
-  REDIS_URL: "redis://localhost:6379",
 };
 
 describe("parseEnv", () => {
@@ -61,7 +60,6 @@ describe("parseEnv", () => {
     expect(result.kind).toBe("invalid_env");
     expect(result.issues).toEqual([
       { variable: "DATABASE_URL", message: "is required but not set" },
-      { variable: "REDIS_URL", message: "is required but not set" },
     ]);
     expect(result.reason).toContain("DATABASE_URL: is required but not set");
     expect(result.reason).toContain(".env.example");
@@ -70,7 +68,6 @@ describe("parseEnv", () => {
   it.each([
     ["DATABASE_URL", "mysql://user:hunter2@localhost/db"],
     ["DATABASE_URL", "not a url"],
-    ["REDIS_URL", "http://localhost:6379"],
     ["LOG_LEVEL", "loud"],
     ["NODE_ENV", "staging"],
     ["MIN_DOWNLOAD_BYTES", "big"],

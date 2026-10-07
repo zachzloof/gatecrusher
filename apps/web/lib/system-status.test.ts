@@ -6,7 +6,6 @@ function health(overrides: Partial<HealthResponse> = {}): HealthResponse {
   return {
     status: "ok",
     db: { ok: true },
-    redis: { ok: true },
     worker: { online: true, lastBeatAt: "2026-10-01T12:00:00.000Z" },
     checkedAt: "2026-10-01T12:00:01.000Z",
     ...overrides,
@@ -25,17 +24,30 @@ describe("describeProblem", () => {
     });
   });
 
-  it.each([
-    [{ db: { ok: false } }, "Postgres unreachable"],
-    [{ redis: { ok: false } }, "Redis unreachable"],
-    [{ db: { ok: false }, redis: { ok: false } }, "Postgres and Redis unreachable"],
-  ])("names the unreachable services before the worker", (overrides, expected) => {
+  it("names Postgres before the worker", () => {
     const problem = describeProblem(
-      health({ ...overrides, status: "degraded", worker: { online: false, lastBeatAt: null } }),
+      health({
+        db: { ok: false },
+        status: "degraded",
+        worker: { online: false, lastBeatAt: null },
+      }),
     );
 
-    expect(problem?.message).toContain(expected);
-    expect(problem?.command).toBe("docker compose up -d");
+    expect(problem).toEqual({
+      message: "Postgres unreachable. Start it:",
+      command: "docker compose up -d",
+    });
+  });
+
+  it("tells a desktop user to restart the app instead of giving a command", () => {
+    const offline = health({ worker: { online: false, lastBeatAt: null } });
+    const dbDown = health({ db: { ok: false }, status: "degraded" });
+
+    expect(describeProblem(offline, { desktop: true })?.command).toBeUndefined();
+    expect(describeProblem(offline, { desktop: true })?.message).toContain("quit Gatecrusher");
+    expect(describeProblem(dbDown, { desktop: true })).toEqual({
+      message: "The database stopped. Quit Gatecrusher and open it again.",
+    });
   });
 
   it("says so when the server did not answer at all", () => {

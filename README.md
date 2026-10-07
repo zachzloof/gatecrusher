@@ -15,12 +15,18 @@ for you to handle by hand. Why, and what is paused: [docs/PIVOT.md](docs/PIVOT.m
 
 | Piece                      | Runs                      | Started with                            |
 | -------------------------- | ------------------------- | --------------------------------------- |
-| Postgres, Redis            | Docker Compose            | `docker compose up -d`                  |
+| Postgres                   | Docker Compose            | `docker compose up -d`                  |
 | Web (UI + API), `apps/web` | natively, with hot reload | `pnpm dev`                              |
 | Worker, `apps/worker`      | **natively, always**      | `pnpm --filter @gatecrusher/worker dev` |
 
 The worker is never containerised. In today's default mode it runs yt-dlp, no browser.
 (The paused browser mode would need a visible window and refuses to start headless.)
+Postgres is the only service: it holds the data, the job queue (the `jobs` table) and the
+worker's heartbeat.
+
+**Desktop app.** The same app also ships as an installer for Windows and macOS that runs
+everything itself (its own Postgres, web, worker, yt-dlp and ffmpeg) with nothing else to
+install. How to build it and hand it out: [docs/DESKTOP.md](docs/DESKTOP.md).
 
 ## 5-minute local setup
 
@@ -38,7 +44,7 @@ pnpm install
 # 2. Create your env file. The defaults match docker-compose.yml.
 cp .env.example .env            # PowerShell: Copy-Item .env.example .env
 
-# 3. Start Postgres and Redis (only those two start by default)
+# 3. Start Postgres (the only service that starts by default)
 docker compose up -d
 
 # 4. Create the tables, and optionally add a fake playlist with four fake tracks
@@ -55,17 +61,10 @@ Then, **in a second terminal on the host**, start the worker:
 pnpm --filter @gatecrusher/worker dev
 ```
 
-It validates its environment, connects to Postgres and Redis, and logs
+It validates its environment, connects to Postgres, and logs
 `Worker ready, waiting for jobs`. Within a few seconds the "Worker offline" banner in
 the UI disappears. Stop it with Ctrl+C; it shuts down cleanly and the banner returns.
-
-To prove the queue round-trip, send it a no-op job from a third terminal:
-
-```sh
-pnpm --filter @gatecrusher/worker enqueue-ping
-```
-
-The worker logs `Processed ping job` and the command prints the worker's answer.
+It picks up queued tracks by itself, the oldest first, one at a time.
 
 ### Adding a playlist
 
@@ -119,7 +118,6 @@ change it in `.env`:
 | Service            | Variable        | Also update                |
 | ------------------ | --------------- | -------------------------- |
 | Postgres           | `POSTGRES_PORT` | the port in `DATABASE_URL` |
-| Redis              | `REDIS_PORT`    | the port in `REDIS_URL`    |
 | Web in Docker only | `WEB_PORT`      | nothing                    |
 
 The native dev server takes its port from the shell, not from `.env`. Check the URL
@@ -141,28 +139,28 @@ values.
 
 ## Commands
 
-| Command                                   | What it does                                                    |
-| ----------------------------------------- | --------------------------------------------------------------- |
-| `pnpm dev`                                | Web with hot reload, on `127.0.0.1:3000`                        |
-| `pnpm --filter @gatecrusher/worker dev`   | Worker, restarting on file changes                              |
-| `pnpm --filter @gatecrusher/worker start` | Worker, without the file watcher                                |
-| `pnpm build`                              | Production build                                                |
-| `pnpm lint`                               | ESLint across the workspace                                     |
-| `pnpm typecheck`                          | `tsc --noEmit` across the workspace                             |
-| `pnpm test`                               | Unit + integration tests (needs `docker compose up -d`)         |
-| `pnpm test:unit`                          | Unit tests only, no services needed                             |
-| `pnpm test:e2e`                           | Playwright UI tests (headless; no services needed)              |
-| `pnpm format`                             | Prettier                                                        |
-| `pnpm db:generate`                        | Generate a migration after changing `packages/db/src/schema.ts` |
-| `pnpm db:migrate`                         | Apply pending migrations                                        |
-| `pnpm db:seed`                            | Insert / refresh the fake seed playlist                         |
+| Command                                    | What it does                                                    |
+| ------------------------------------------ | --------------------------------------------------------------- |
+| `pnpm dev`                                 | Web with hot reload, on `127.0.0.1:3000`                        |
+| `pnpm --filter @gatecrusher/worker dev`    | Worker, restarting on file changes                              |
+| `pnpm --filter @gatecrusher/worker start`  | Worker, without the file watcher                                |
+| `pnpm build`                               | Production build                                                |
+| `pnpm lint`                                | ESLint across the workspace                                     |
+| `pnpm typecheck`                           | `tsc --noEmit` across the workspace                             |
+| `pnpm test`                                | Unit + integration tests (needs `docker compose up -d`)         |
+| `pnpm test:unit`                           | Unit tests only, no services needed                             |
+| `pnpm test:e2e`                            | Playwright UI tests (headless; no services needed)              |
+| `pnpm format`                              | Prettier                                                        |
+| `pnpm db:generate`                         | Generate a migration after changing `packages/db/src/schema.ts` |
+| `pnpm db:migrate`                          | Apply pending migrations                                        |
+| `pnpm db:seed`                             | Insert / refresh the fake seed playlist                         |
+| `pnpm --filter @gatecrusher/desktop smoke` | Starts the real desktop app and checks it (after `bundle`)      |
 
 First time running the tests: `pnpm --filter @gatecrusher/web exec playwright install chromium`
 (the adapter and worker integration tests and the UI e2e all use it, headless).
 
-Integration tests use the Postgres and Redis from your `.env`, but never your data: the
-database and API tests create and drop their own throwaway databases, and the queue test
-uses a throwaway key prefix. Nothing in `pnpm test` reaches SoundCloud: ingest is tested
+Integration tests use the Postgres from your `.env`, but never your data: the database,
+API and worker tests create and drop their own throwaway databases. Nothing in `pnpm test` reaches SoundCloud: ingest is tested
 against recorded fixtures, and the native adapter against hand-written fixture pages on a
 local server whose network guard fails any request that leaves localhost. e2e starts its own web server on port 3100 and fakes the API
 in the browser, so it needs no database.
@@ -172,7 +170,7 @@ in the browser, so it needs no database.
 Day to day, web runs natively. Two Docker options exist:
 
 ```sh
-# Production-style: build the image and run it next to Postgres and Redis
+# Production-style: build the image and run it next to Postgres
 docker compose --profile web up -d --build
 
 # Hot reload inside a container (repo bind-mounted)
@@ -186,7 +184,8 @@ first. The worker still runs on the host either way.
 
 ```
 apps/web         Next.js App Router UI and API route handlers
-apps/worker      BullMQ worker, the headed Playwright browser, the login script
+apps/worker      The job loop (yt-dlp downloads), the paused headed-browser path, the login script
+apps/desktop     Electron shell and installer: private Postgres, web and worker in one app
 packages/core    Shared types, zod schemas, track classifier, CSV, job state machine. No I/O
 packages/db      Drizzle schema, migrations, repository functions, seed
 packages/gates   Step runner, registry, blocker detector, download verification, adapters

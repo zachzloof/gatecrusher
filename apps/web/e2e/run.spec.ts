@@ -181,18 +181,17 @@ test("a paused track shows what it needs and its screenshot, and running again r
 
 test("a run that cannot start explains why and can be tried again", async ({ page }) => {
   await fakePlaylist(page, DETAIL);
-  const run = await fakeRun(page, 503, {
+  const run = await fakeRun(page, 500, {
     error: {
-      code: "queue_unavailable",
-      message:
-        "Could not reach Redis, so nothing was started. Check `docker compose up -d` is running, then try again.",
+      code: "internal",
+      message: "Could not reach the database, so nothing was started. Try again in a moment.",
     },
   });
   await page.goto(`/playlists/${PLAYLIST_ID}`);
 
   await runButton(page).click();
 
-  await expect(runBar(page).getByRole("alert")).toContainText("Could not reach Redis");
+  await expect(runBar(page).getByRole("alert")).toContainText("Could not reach the database");
   await expect(runButton(page)).toBeEnabled();
   expect(run.count()).toBe(1);
 });

@@ -13,6 +13,9 @@ export default tseslint.config(
       "**/.turbo/**",
       "**/dist/**",
       "**/drizzle/**",
+      "apps/desktop/stage/**",
+      "apps/desktop/vendor/**",
+      "apps/desktop/release/**",
       "**/next-env.d.ts",
       "**/playwright-report/**",
       "**/test-results/**",
@@ -72,6 +75,17 @@ export default tseslint.config(
   {
     files: ["**/*.{js,mjs,cjs}"],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    // Build scripts report progress on the console.
+    files: ["apps/desktop/scripts/**/*.mjs"],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { "no-console": "off" },
+  },
+  {
+    // The gate window's page runs in the browser.
+    files: ["apps/desktop/src/renderer/**/*.ts"],
+    languageOptions: { globals: { ...globals.browser } },
   },
   prettier,
 );

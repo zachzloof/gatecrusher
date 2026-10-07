@@ -36,6 +36,13 @@
       "when": 1791315276480,
       "tag": "0004_cancelled_job_status",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791368630642,
+      "tag": "0005_worker_heartbeat",
+      "breakpoints": true
     }
   ]
 }

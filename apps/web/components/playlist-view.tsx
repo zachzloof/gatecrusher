@@ -1,6 +1,6 @@
 "use client";
 
-import type { IngestSource } from "@gatecrusher/core";
+import { playlistSlug, type IngestSource } from "@gatecrusher/core";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -153,7 +153,12 @@ export function PlaylistView({ playlistId, skippedCount }: PlaylistViewProps) {
               {`${skippedCount} ${skippedCount === 1 ? "track" : "tracks"} in this playlist could not be read (private, removed or blocked in this region) and ${skippedCount === 1 ? "is" : "are"} not listed.`}
             </Notice>
           )}
-          <RunBar playlistId={playlist.id} tracks={tracks} onChanged={refresh} />
+          <RunBar
+            playlistId={playlist.id}
+            tracks={tracks}
+            onChanged={refresh}
+            downloadsFolder={playlistSlug(playlist.soundcloudUrl, playlist.title)}
+          />
           <PausedTracks tracks={tracks} />
           <TracksTable tracks={tracks} />
         </>

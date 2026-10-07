@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:"
+    />
+    <title>Gatecrusher</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b0c0e;
+        --surface-1: #131518;
+        --surface-2: #1b1e22;
+        --border: #262a30;
+        --text: #e7e9ec;
+        --text-muted: #8b929b;
+        --text-faint: #5b626b;
+        --accent: #ff7a1a;
+        --info: #5aa9ff;
+        --danger: #f0524f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 32px;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/20px system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      .mark {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 20px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+        line-height: 28px;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 16px;
+        color: var(--text-muted);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+      }
+      input {
+        width: 100%;
+        height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface-2);
+        color: var(--text);
+        font: inherit;
+      }
+      input[aria-invalid="true"] {
+        border-color: var(--danger);
+      }
+      input:focus-visible,
+      button:focus-visible {
+        outline: 2px solid var(--info);
+        outline-offset: 2px;
+      }
+      button {
+        height: 36px;
+        padding: 0 14px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface-1);
+        color: var(--text);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 140ms ease-out;
+      }
+      button:hover {
+        background: var(--surface-2);
+      }
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: var(--bg);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      .error {
+        min-height: 20px;
+        margin: 8px 0 0;
+        color: var(--danger);
+      }
+      .detail {
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--surface-1);
+        font-family: ui-monospace, "JetBrains Mono", Consolas, monospace;
+        font-size: 12px;
+        color: var(--text-muted);
+        overflow-wrap: anywhere;
+        max-height: 140px;
+        overflow: auto;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text-muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--info);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.3;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .dot {
+          animation: none;
+        }
+      }
+      [hidden] {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+      <rect width="32" height="32" rx="6" fill="#131518" />
+      <path d="M9 8v16M16 8v16M23 8v16" stroke="#262a30" stroke-width="2" stroke-linecap="round" />
+      <path d="M6 16h20" stroke="#ff7a1a" stroke-width="3" stroke-linecap="round" />
+    </svg>
+
+    <section id="code" hidden>
+      <h1>Enter your access code</h1>
+      <p>This is a private test build. <span id="code-contact"></span> gave you the code.</p>
+      <form id="code-form" novalidate>
+        <label for="code-input">Access code</label>
+        <input
+          id="code-input"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          aria-describedby="code-error"
+        />
+        <p id="code-error" class="error" role="alert"></p>
+        <div class="row">
+          <button id="code-submit" class="primary" type="submit">Continue</button>
+          <button type="button" data-action="quit">Quit</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="starting" hidden>
+      <h1>Starting Gatecrusher</h1>
+      <p class="status" role="status">
+        <span class="dot" aria-hidden="true"></span><span id="step"></span>
+      </p>
+    </section>
+
+    <section id="expired" hidden>
+      <h1>This test build has ended</h1>
+      <p>
+        It stopped working on <span id="expired-at"></span>. Ask
+        <span id="expired-contact"></span> for the new installer.
+      </p>
+      <p>Your downloads are still on this computer.</p>
+      <div class="row">
+        <button type="button" data-action="quit">Quit</button>
+      </div>
+    </section>
+
+    <section id="error" hidden>
+      <h1>Gatecrusher could not start</h1>
+      <p>
+        Try quitting and opening it again. If it keeps happening, send the log files to whoever gave
+        you the app.
+      </p>
+      <div id="error-detail" class="detail"></div>
+      <div class="row">
+        <button type="button" data-action="logs">Open log files</button>
+        <button type="button" data-action="quit">Quit</button>
+      </div>
+    </section>
+
+    <script src="gate.js"></script>
+  </body>
+</html>

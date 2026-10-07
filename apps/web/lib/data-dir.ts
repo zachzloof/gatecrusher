@@ -7,5 +7,7 @@ import { getEnv } from "./env";
  * path instead.
  */
 export function getDataDir(): string {
-  return path.resolve(process.cwd(), "../..", getEnv().DATA_DIR);
+  // Resolved at run time; the comment keeps the build's file tracer from copying
+  // whatever is under the repo (downloads included) into the server bundle.
+  return path.resolve(/*turbopackIgnore: true*/ process.cwd(), "../..", getEnv().DATA_DIR);
 }

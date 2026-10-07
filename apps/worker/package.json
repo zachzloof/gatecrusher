@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./embed": "./src/embed.ts"
+  },
   "scripts": {
     "dev": "node --env-file-if-exists=../../.env --watch src/index.ts",
     "start": "node --env-file-if-exists=../../.env src/index.ts",
     "login": "node --env-file-if-exists=../../.env src/cli/login.ts",
-    "enqueue-ping": "node --env-file-if-exists=../../.env src/cli/ping.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -17,8 +19,6 @@
     "@gatecrusher/core": "workspace:*",
     "@gatecrusher/db": "workspace:*",
     "@gatecrusher/gates": "workspace:*",
-    "bullmq": "^6.3.0",
-    "ioredis": "^6.0.0",
     "pino": "^10.3.1",
     "playwright": "^1.63.0"
   },

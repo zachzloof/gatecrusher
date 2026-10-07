@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderArchive, Play, Square } from "lucide-react";
+import { FolderArchive, FolderOpen, Play, Square } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import {
   runResponseSchema,
   type TrackDto,
 } from "@/lib/api-schemas";
+import { useDesktop } from "@/lib/desktop";
 import { formatBytes } from "@/lib/format";
 import {
   cancelResultMessage,
@@ -149,6 +150,8 @@ interface RunBarProps {
   tracks: readonly TrackDto[];
   /** Called once a run was started or cancelled, so the page can show the new statuses. */
   onChanged: () => void;
+  /** The playlist's folder under downloads/, opened by "Open folder" in the desktop app. */
+  downloadsFolder: string;
 }
 
 /**
@@ -156,8 +159,9 @@ interface RunBarProps {
  * far it has got. Clicking "Download tracks" again is how failed, cancelled or paused
  * tracks are retried, so it stays available while a run is in progress.
  */
-export function RunBar({ playlistId, tracks, onChanged }: RunBarProps) {
+export function RunBar({ playlistId, tracks, onChanged, downloadsFolder }: RunBarProps) {
   const [outcome, setOutcome] = useState<Outcome>({ kind: "idle" });
+  const desktop = useDesktop();
   const progress = downloadProgress(tracks);
   const summary = progressSummary(progress);
 
@@ -213,6 +217,15 @@ export function RunBar({ playlistId, tracks, onChanged }: RunBarProps) {
           <Button disabled>
             <FolderArchive aria-hidden="true" />
             Download zip
+          </Button>
+        )}
+        {desktop !== null && (
+          <Button
+            onClick={() => void desktop.openDownloads(downloadsFolder)}
+            disabled={downloaded.length === 0}
+          >
+            <FolderOpen aria-hidden="true" />
+            Open folder
           </Button>
         )}
       </div>

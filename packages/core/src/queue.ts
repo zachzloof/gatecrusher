@@ -1,30 +1,9 @@
 import { z } from "zod";
 
-/** The single BullMQ queue. Browser jobs are processed with concurrency 1. */
-export const QUEUE_NAME = "gatecrusher";
+// The queue is the `jobs` table: the worker takes the oldest QUEUED job, one at a time.
 
-/** No-op job used to prove the queue round-trip between web/CLI and the worker. */
-export const PING_JOB_NAME = "ping";
-
-export const pingJobPayloadSchema = z.object({
-  requestedAt: z.iso.datetime(),
-});
-export type PingJobPayload = z.infer<typeof pingJobPayloadSchema>;
-
-export const pingJobResultSchema = z.object({
-  pong: z.literal(true),
-  requestedAt: z.iso.datetime(),
-  processedAt: z.iso.datetime(),
-});
-export type PingJobResult = z.infer<typeof pingJobResultSchema>;
-
-/** One browser job: run (or resume) the adapter for one row of the `jobs` table. */
-export const TRACK_JOB_NAME = "track";
-
-export const trackJobPayloadSchema = z.object({
-  jobId: z.uuid(),
-});
-export type TrackJobPayload = z.infer<typeof trackJobPayloadSchema>;
+/** How often an idle worker looks for the next queued job. */
+export const WORKER_POLL_INTERVAL_MS = 1_000;
 
 export const TRACK_JOB_OUTCOMES = [
   "succeeded",
@@ -42,11 +21,10 @@ export const trackJobResultSchema = z.object({
 });
 export type TrackJobResult = z.infer<typeof trackJobResultSchema>;
 
-/** Redis key the worker refreshes while it is alive; web reads it for /api/health. */
-export const WORKER_HEARTBEAT_KEY = "gatecrusher:worker:heartbeat";
+/** The worker rewrites its heartbeat row this often while it is alive. */
 export const WORKER_HEARTBEAT_INTERVAL_MS = 5_000;
-/** The key expires after this long without a beat, so a dead worker reads as offline. */
-export const WORKER_HEARTBEAT_TTL_SECONDS = 15;
+/** A heartbeat older than this reads as offline. */
+export const WORKER_HEARTBEAT_STALE_MS = 15_000;
 
 export const workerHeartbeatSchema = z.object({
   pid: z.number().int().positive(),

@@ -3,8 +3,8 @@ import { humanReasonSchema, manualReasonSchema } from "./domain.ts";
 import { downloadedFileSchema, humanDescriptionSchema } from "./gate.ts";
 
 /**
- * Emitted when a job parks for the human. Written to the `events` table and published
- * on Redis so the UI can show a Needs-you card. The `human_requests` row mirrors it.
+ * Emitted when a job parks for the human. Written to the `events` table so the UI can
+ * show a Needs-you card. The `human_requests` row mirrors it.
  */
 export const needsHumanEventSchema = z.object({
   type: z.literal("needs_human"),

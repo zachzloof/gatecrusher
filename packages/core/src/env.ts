@@ -6,7 +6,6 @@ const baseShape = {
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/, error: "must be a postgres:// URL" }),
-  REDIS_URL: z.url({ protocol: /^rediss?$/, error: "must be a redis:// URL" }),
 };
 
 const dataDir = z.string().min(1).default("./data");
@@ -115,13 +114,7 @@ export const ENV_VAR_DOCS: readonly EnvVarDoc[] = [
     name: "DATABASE_URL",
     usedBy: ["web", "worker"],
     required: true,
-    description: "Postgres connection string.",
-  },
-  {
-    name: "REDIS_URL",
-    usedBy: ["web", "worker"],
-    required: true,
-    description: "Redis connection string for the queue, live events and worker heartbeat.",
+    description: "Postgres connection string. Also holds the job queue and the worker heartbeat.",
   },
   {
     name: "NODE_ENV",

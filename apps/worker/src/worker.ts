@@ -1,5 +1,12 @@
-import { QUEUE_NAME, WORKER_HEARTBEAT_KEY, type WorkerEnv } from "@gatecrusher/core";
-import { createDb } from "@gatecrusher/db";
+import { WORKER_POLL_INTERVAL_MS, type WorkerEnv } from "@gatecrusher/core";
+import {
+  createDb,
+  getJobContext,
+  interruptedJobIds,
+  markJobFailed,
+  nextQueuedJobId,
+  refreshRun,
+} from "@gatecrusher/db";
 import {
   createDelayProvider,
   registry as defaultRegistry,
@@ -7,8 +14,6 @@ import {
   type BrowserGateAdapter,
   type DelayProvider,
 } from "@gatecrusher/gates";
-import { Worker } from "bullmq";
-import { Redis } from "ioredis";
 import type { Logger } from "pino";
 import {
   createBrowserSession,
@@ -18,20 +23,18 @@ import {
 } from "./browser.ts";
 import { removeStaleCookieFiles } from "./cookie-file.ts";
 import { startHeartbeat } from "./heartbeat.ts";
+import { startJobLoop, type TrackOutcome } from "./job-loop.ts";
 import { createParkedPages } from "./parked-pages.ts";
 import { browserProfileDir, resolveDataDir } from "./paths.ts";
 import { execFileRunner, type ProcessRunner } from "./process-runner.ts";
-import { processJob, type TrackOutcome } from "./processor.ts";
 import { processTrackJob, type TrackJobDeps } from "./track-job.ts";
 import { processYtDlpJob } from "./ytdlp-job.ts";
 
 export interface StartWorkerOptions {
   env: WorkerEnv;
   log: Logger;
-  /** Overridable so integration tests can run beside a real worker. */
-  queueName?: string;
-  queuePrefix?: string;
-  heartbeatKey?: string;
+  /** How long an idle worker waits before looking for queued jobs again. */
+  pollIntervalMs?: number;
   /**
    * Test seams. The real worker always uses the headed launcher, the randomised delay
    * provider, the built-in registry and real yt-dlp; tests swap in a headless browser
@@ -52,30 +55,10 @@ export interface RunningWorker {
 }
 
 export type StartWorkerResult =
-  | { ok: true; worker: RunningWorker }
-  | { ok: false; kind: "postgres_unreachable" | "redis_unreachable"; reason: string };
+  { ok: true; worker: RunningWorker } | { ok: false; kind: "postgres_unreachable"; reason: string };
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-/** One connection attempt with no retries, so a wrong URL fails fast at startup. */
-async function probeRedis(url: string): Promise<void> {
-  const probe = new Redis(url, {
-    lazyConnect: true,
-    connectTimeout: 5_000,
-    maxRetriesPerRequest: 0,
-    retryStrategy: () => null,
-  });
-  // The rejection from connect()/ping() below carries the failure; this listener only
-  // stops ioredis from also reporting it as an unhandled "error" event.
-  probe.on("error", () => undefined);
-  try {
-    await probe.connect();
-    await probe.ping();
-  } finally {
-    probe.disconnect();
-  }
 }
 
 export async function startWorker(options: StartWorkerOptions): Promise<StartWorkerResult> {
@@ -93,22 +76,6 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
     };
   }
   log.info("Connected to Postgres");
-
-  try {
-    await probeRedis(env.REDIS_URL);
-  } catch (error) {
-    await db.close();
-    return {
-      ok: false,
-      kind: "redis_unreachable",
-      reason: `Cannot reach Redis at REDIS_URL (${errorMessage(error)}). Is \`docker compose up -d\` running?`,
-    };
-  }
-
-  // BullMQ requires `maxRetriesPerRequest: null` on connections it blocks on.
-  const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
-  redis.on("error", (error) => log.warn({ err: error }, "Redis connection error"));
-  log.info("Connected to Redis");
 
   const dataDir = resolveDataDir(env.DATA_DIR);
   const delay = options.delay ?? createDelayProvider();
@@ -158,49 +125,28 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
     processTrack = (jobId) => processYtDlpJob(jobId, ytDlpDeps);
   }
 
-  let resumeTimer: NodeJS.Timeout | undefined;
-  const queueName = options.queueName ?? QUEUE_NAME;
-  const worker = new Worker(
-    queueName,
-    (job) =>
-      processJob(job, {
-        log,
-        delay,
-        processTrack,
-        backOff: (ms) => {
-          // pause(true) does not wait for the active job: this runs from inside it.
-          void worker.pause(true);
-          clearTimeout(resumeTimer);
-          resumeTimer = setTimeout(() => {
-            void worker.resume();
-            log.info("Queue resumed after the back-off");
-          }, ms);
-          resumeTimer.unref();
-        },
-      }),
-    {
-      connection: redis,
-      // Hard rule: one download at a time.
-      concurrency: 1,
-      ...(options.queuePrefix === undefined ? {} : { prefix: options.queuePrefix }),
-    },
-  );
-  worker.on("completed", (job) =>
-    log.info({ queueJobId: job.id, jobName: job.name }, "Queue job completed"),
-  );
-  worker.on("failed", (job, error) =>
-    log.error({ queueJobId: job?.id, jobName: job?.name, err: error }, "Queue job failed"),
-  );
-  worker.on("error", (error) => log.error({ err: error }, "Queue worker error"));
-  await worker.waitUntilReady();
-
-  const heartbeat = await startHeartbeat({
-    redis,
-    key: options.heartbeatKey ?? WORKER_HEARTBEAT_KEY,
+  const loop = startJobLoop({
     log,
+    interruptedJobIds: () => interruptedJobIds(db.db),
+    nextJobId: () => nextQueuedJobId(db.db),
+    processTrack,
+    recordCrash: async (jobId, error) => {
+      const failed = await markJobFailed(db.db, {
+        jobId,
+        error: `The worker hit an unexpected error: ${errorMessage(error)}`,
+      });
+      // A job that never started stays QUEUED and is tried again after the pause.
+      if (!failed.ok) log.warn({ jobId, kind: failed.kind }, "Crashed job left as it was");
+      const found = await getJobContext(db.db, jobId);
+      if (found !== null) await refreshRun(db.db, found.job.runId);
+    },
+    delay,
+    pollIntervalMs: options.pollIntervalMs ?? WORKER_POLL_INTERVAL_MS,
   });
+
+  const heartbeat = await startHeartbeat({ db: db.db, log });
   log.info(
-    { queue: queueName, concurrency: 1, dataDir, nativeDownloadMode: env.NATIVE_DOWNLOAD_MODE },
+    { concurrency: 1, dataDir, nativeDownloadMode: env.NATIVE_DOWNLOAD_MODE },
     "Worker ready, waiting for jobs",
   );
 
@@ -208,12 +154,10 @@ export async function startWorker(options: StartWorkerOptions): Promise<StartWor
     ok: true,
     worker: {
       close: async () => {
-        clearTimeout(resumeTimer);
-        await worker.close();
+        await loop.stop();
         // Closed cleanly so the persistent profile is not corrupted.
         await browser?.close();
         await heartbeat.stop();
-        await redis.quit();
         await db.close();
       },
     },

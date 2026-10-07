@@ -1,0 +1,65 @@
+name: Desktop installers
+
+# Builds the desktop installers on each platform. Run by hand from the Actions tab
+# (Run workflow); the installers are attached to the run as artifacts.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+  # No signing certificates: never look for one in the runner's keychain.
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  installer:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows (x64)
+            runner: windows-latest
+            arch: x64
+            target: --win --x64
+          - name: macOS (Apple Silicon)
+            runner: macos-15
+            arch: arm64
+            target: --mac --arm64
+          - name: macOS (Intel)
+            runner: macos-15-intel
+            arch: x64
+            target: --mac --x64
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Download Postgres, yt-dlp and ffmpeg
+        run: pnpm --filter @gatecrusher/desktop fetch-binaries --arch=${{ matrix.arch }}
+      - name: Build and stage the app
+        run: pnpm --filter @gatecrusher/desktop bundle --arch=${{ matrix.arch }}
+      - name: Unit tests
+        run: pnpm --filter @gatecrusher/desktop test
+      - name: Build the installer
+        working-directory: apps/desktop
+        run: pnpm exec electron-builder --config electron-builder.yml --publish never ${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Gatecrusher-${{ runner.os }}-${{ matrix.arch }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.dmg
+          if-no-files-found: error
+          retention-days: 14

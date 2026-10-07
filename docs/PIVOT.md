@@ -105,6 +105,19 @@ sign-in page would run into the anti-bot check again (hard rule 1). So the login
 The token stops working when that browser signs out of SoundCloud; reconnecting is the
 same paste.
 
+## Every track, and a desktop app (2026-10-06 / 2026-10-07)
+
+- **Every track is downloaded** (commit `df3e2c3`): native tracks get the uploader's file
+  only; every other track gets the uploader's file if there is one, else the best stream
+  the signed-in account can play, with tags and artwork. Tracks SoundCloud only streams
+  DRM-protected are marked manual (`drm_protected`); nothing is circumvented. This
+  replaces the "left out" note below.
+- **Redis removed.** The queue is the `jobs` table: the worker polls for `QUEUED` jobs,
+  and its heartbeat is a one-row `worker_heartbeat` table. Postgres is the only service.
+- **Desktop app** (`apps/desktop`, Electron): one installer per platform with its own
+  Postgres, yt-dlp and ffmpeg, an access code and an end date, for a few friends to test.
+  See [DESKTOP.md](DESKTOP.md). The desktop build contains no browser automation.
+
 ## Later
 
 - How to approach gates without an automated browser, and whether an AI agent still
@@ -114,7 +127,7 @@ same paste.
 
 ## Left out, and why
 
-- **Ripping streams of tracks that are not downloadable.** Asked for on 2026-10-05
+- **Ripping streams of tracks that are not downloadable** (since built, see above). Asked for on 2026-10-05
   ("download the other tracks with yt-dlp"); not built. For a track the uploader did not
   enable download on, that means pulling the stream and saving it, which SoundCloud's
   terms forbid and which takes something the artist chose not to give away — in the
