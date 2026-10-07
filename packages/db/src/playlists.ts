@@ -226,51 +226,6 @@ export async function getPlaylistWithTracks(
   return { ...playlist, tracks: rows };
 }
 
-export interface LinkedTrackRow {
-  trackId: string;
-  title: string;
-  artist: string;
-  permalinkUrl: string;
-  purchaseUrl: string | null;
-  purchaseTitle: string | null;
-  gatePlatform: string | null;
-  playlistId: string;
-  playlistTitle: string;
-}
-
-/** Every track of one classification across all playlists, in playlist order. */
-async function listTracksClassified(
-  db: Database,
-  classification: TrackClassification,
-): Promise<LinkedTrackRow[]> {
-  return db
-    .select({
-      trackId: tracks.id,
-      title: tracks.title,
-      artist: tracks.artist,
-      permalinkUrl: tracks.permalinkUrl,
-      purchaseUrl: tracks.purchaseUrl,
-      purchaseTitle: tracks.purchaseTitle,
-      gatePlatform: tracks.gatePlatform,
-      playlistId: playlists.id,
-      playlistTitle: playlists.title,
-    })
-    .from(tracks)
-    .innerJoin(playlists, eq(tracks.playlistId, playlists.id))
-    .where(eq(tracks.classification, classification))
-    .orderBy(asc(playlists.title), asc(playlists.id), asc(tracks.position), asc(tracks.id));
-}
-
-/** Every `buy` track: for sale, never bought by the app. */
-export function listBuyTracks(db: Database): Promise<LinkedTrackRow[]> {
-  return listTracksClassified(db, "buy");
-}
-
-/** Every `gate` track: a free-download gate the owner completes by hand for now. */
-export function listGateTracks(db: Database): Promise<LinkedTrackRow[]> {
-  return listTracksClassified(db, "gate");
-}
-
 export interface PlaylistDownloadRow {
   trackId: string;
   position: number;

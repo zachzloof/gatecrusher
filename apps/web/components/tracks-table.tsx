@@ -114,11 +114,25 @@ function Reason({ track }: { track: TrackDto }) {
   );
 }
 
-/** The gate or store link when there is one: spelled out on wide screens, an icon below. */
-function PurchaseLink({ track }: { track: TrackDto }) {
-  const href = safeHref(track.purchaseUrl);
-  if (href === undefined || track.classification === "native") return null;
-  const what = track.classification === "gate" ? "gate" : "store";
+/** The gate or store link for the high-quality download, or nothing for a native track. */
+function hqDownloadHref(track: TrackDto): string | undefined {
+  if (track.classification === "native") return undefined;
+  return safeHref(track.purchaseUrl);
+}
+
+/**
+ * Where to get the high-quality download: the gate or the store. Spelled out on wide
+ * screens, an icon below; a dash when the track has no such link.
+ */
+function HqDownloadLink({ track }: { track: TrackDto }) {
+  const href = hqDownloadHref(track);
+  if (href === undefined) {
+    return (
+      <span aria-hidden="true" className="text-text-muted">
+        —
+      </span>
+    );
+  }
   return (
     <>
       <a
@@ -130,17 +144,27 @@ function PurchaseLink({ track }: { track: TrackDto }) {
       >
         {middleTruncate(displayUrl(href), 28)}
       </a>
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Open the ${what} link for ${track.title}`}
-        title={href}
-        className={cn(ICON_LINK, "xl:hidden")}
-      >
-        <Link2 className="size-4" aria-hidden="true" />
-      </a>
+      <HqDownloadIcon track={track} className="xl:hidden" />
     </>
+  );
+}
+
+/** The same link as an icon only, or nothing when the track has none. */
+function HqDownloadIcon({ track, className }: { track: TrackDto; className?: string }) {
+  const href = hqDownloadHref(track);
+  if (href === undefined) return null;
+  const what = track.classification === "gate" ? "gate" : "store";
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`Open the ${what} link for ${track.title}`}
+      title={href}
+      className={cn(ICON_LINK, className)}
+    >
+      <Link2 className="size-4" aria-hidden="true" />
+    </a>
   );
 }
 
@@ -234,7 +258,10 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 align="right"
                 className="hidden w-20 md:table-cell"
               />
-              <TableHead className="w-[4.5rem] text-right xl:w-56">Link</TableHead>
+              <TableHead className="hidden w-32 text-right md:table-cell xl:w-56">
+                HQ Download
+              </TableHead>
+              <TableHead className="w-[4.5rem] text-right md:w-12">Link</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -284,9 +311,15 @@ export function TracksTable({ tracks }: { tracks: readonly TrackDto[] }) {
                 <TableCell className="hidden text-right font-mono text-xs text-text-muted tabular-nums md:table-cell">
                   {formatDuration(track.durationMs)}
                 </TableCell>
+                <TableCell className="hidden md:table-cell">
+                  <div className="flex items-center justify-end">
+                    <HqDownloadLink track={track} />
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center justify-end gap-1">
-                    <PurchaseLink track={track} />
+                    {/* Below 768px the HQ Download column folds into this cell as an icon. */}
+                    <HqDownloadIcon track={track} className="md:hidden" />
                     <a
                       href={safeHref(track.permalinkUrl)}
                       target="_blank"

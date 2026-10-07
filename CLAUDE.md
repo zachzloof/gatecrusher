@@ -23,7 +23,7 @@ Personal-use web app (single user, built to professional standards). It takes a 
 2. Completes free-download gates automatically with a dedicated burner SoundCloud account, driving a visible browser via Playwright.
 3. Falls back to an AI browser agent (Anthropic API) for unknown gates.
 4. Pauses and hands over to the human whenever a step needs one (captcha, email confirmation, login challenge, unexpected page), then resumes from the same step.
-5. Leaves a **buy list** and a short **manual list** for whatever is genuinely impossible.
+5. Shows, on the playlist itself, where to buy or gate the high-quality download of every track (the **HQ Download** column). There are no separate buy, manual or evals pages any more (removed 2026-10-07).
 
 Files land in a local download folder. The worker runs on a machine the user controls with a headed browser so they can act in the real window when asked.
 
@@ -41,7 +41,7 @@ These are not negotiable. If a task seems to require breaking one, stop and ask.
    - resume **from the same step** when the user clicks Continue in the UI.
    The browser page stays open on that page the whole time.
 3. **Manual means genuinely impossible.** Only mark a track `MANUAL` for: dead link, file gone, requires an account we don't have, or the user clicked Give up. Always store a reason and the link.
-4. **Never auto-purchase anything.** Buy links go to the buy list. Never click a pay/checkout/add-to-cart control.
+4. **Never auto-purchase anything.** Buy links are only ever shown as the HQ Download link on the playlist. Never click a pay/checkout/add-to-cart control.
 5. **SoundCloud login is a token the owner pastes in; never a password.** (Changed by the owner on 2026-10-06 for local use; it used to say credentials live only in the browser profile.) The owner signs in on soundcloud.com in their own browser, copies the `oauth_token` cookie, and pastes it on `/connect`. A burner account is recommended. The token:
    - is stored only in the local Postgres (`soundcloud_account`, one row), after SoundCloud has accepted it;
    - reaches yt-dlp only through a temporary cookie file in `DATA_DIR/tmp`, deleted when the job ends; never on a command line;

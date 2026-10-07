@@ -31,9 +31,9 @@ Define as CSS variables in `apps/web/app/globals.css`, map them into the Tailwin
 | `--accent` | `#ff7a1a` | **Needs you** and the single primary action only |
 | `--ok` | `#3ecf8e` | downloaded / verified |
 | `--info` | `#5aa9ff` | running / in progress |
-| `--warn` | `#f2c94c` | buy list, retryable |
+| `--warn` | `#f2c94c` | buy classification, retryable |
 | `--danger` | `#f0524f` | failed, destructive |
-| `--manual` | `#a78bfa` | manual list |
+| `--manual` | `#a78bfa` | manual tracks |
 
 Rules: the accent appears at most once per viewport outside "Needs you" cards. Status is never colour alone — always pair with a label or icon. Check contrast: body text ≥ 4.5:1 against its surface.
 
@@ -53,7 +53,7 @@ Rules: the accent appears at most once per viewport outside "Needs you" cards. S
 
 ## Layout
 
-- Left nav rail (collapses to icons < 1024px, bottom bar < 640px): Playlists, Runs, Buy list, Manual list, Evals, Settings.
+- Left nav rail (collapses to icons < 1024px, bottom bar < 640px): Playlists, Settings. (Buy list, Manual list and Evals were removed on 2026-10-07; each track's store or gate link is the **HQ Download** column of the tracks table.)
 - A persistent **Needs you** counter in the nav, in accent, visible from every page when > 0.
 - Content max-width 1400px; tables use the full width.
 

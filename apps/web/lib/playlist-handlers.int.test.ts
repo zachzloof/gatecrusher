@@ -4,16 +4,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   addPlaylistResponseSchema,
   apiErrorSchema,
-  buyListResponseSchema,
-  gateListResponseSchema,
   listPlaylistsResponseSchema,
   playlistDetailResponseSchema,
 } from "./api-schemas";
 import { ingestPlaylist } from "./ingest";
 import {
   handleAddPlaylist,
-  handleBuyList,
-  handleGateList,
   handleGetPlaylist,
   handleListPlaylists,
   type HandlerDeps,
@@ -300,66 +296,4 @@ describe("GET /api/playlists/:id", () => {
       expect((await errorOf(response)).code).toBe("not_found");
     },
   );
-});
-
-describe("GET /api/gate-list", () => {
-  it("lists gate tracks with their platform and link", async () => {
-    const { deps } = depsWith();
-    const added = addPlaylistResponseSchema.parse(
-      await (await post({ url: PLAYLIST_URL }, deps)).json(),
-    );
-
-    const body = gateListResponseSchema.parse(await (await handleGateList(deps)).json());
-
-    expect(body.items.map((item) => [item.platform, item.title, item.gateUrl])).toEqual([
-      ["hypeddit", "Gated Bootleg", "https://hypeddit.com/track/fixture1"],
-      ["unknown", "Short Link Free DL", "https://bit.ly/fixture5"],
-    ]);
-    expect(body.items[0]).toMatchObject({ playlistId: added.playlistId, artist: "Fixture Artist" });
-  });
-
-  it("is empty before anything is ingested", async () => {
-    const body = gateListResponseSchema.parse(await (await handleGateList(depsWith().deps)).json());
-
-    expect(body).toEqual({ items: [] });
-  });
-});
-
-describe("GET /api/buy-list", () => {
-  it("is empty before anything is ingested", async () => {
-    const body = buyListResponseSchema.parse(await (await handleBuyList(depsWith().deps)).json());
-
-    expect(body).toEqual({ items: [] });
-  });
-
-  it("lists buy tracks with their store, title, artist and link", async () => {
-    const { deps } = depsWith();
-    const added = addPlaylistResponseSchema.parse(
-      await (await post({ url: PLAYLIST_URL }, deps)).json(),
-    );
-
-    const body = buyListResponseSchema.parse(await (await handleBuyList(deps)).json());
-
-    expect(
-      body.items.map((item) => [item.store, item.title, item.artist, item.purchaseUrl]),
-    ).toEqual([
-      [
-        "Bandcamp",
-        "Label Release",
-        "Fixture Artist",
-        "https://fixture-label.bandcamp.com/track/label-release",
-      ],
-      [
-        "Beatport",
-        "Download Cap Used Up",
-        "Fixture Artist",
-        "https://www.beatport.com/track/cap-used-up/107",
-      ],
-    ]);
-    expect(body.items[0]).toMatchObject({
-      playlistId: added.playlistId,
-      playlistTitle: "Fixture Crate",
-      permalinkUrl: "https://soundcloud.com/fixture-artist/label-release",
-    });
-  });
 });

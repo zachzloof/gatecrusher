@@ -14,7 +14,8 @@ with a worker-offline banner, GitHub Actions CI.
 **Slice 2 — ingest + classify.** Paste a playlist URL; tracks are read through
 SoundCloud's api-v2 (with a `yt-dlp -J` fallback for metadata), stored idempotently, and
 classified `native` / `gate` / `buy` / `none` by a table-tested classifier. Tracks table
-with sort and filter; buy list with CSV export. No browser involved.
+with sort and filter; buy list with CSV export (the list pages were removed on
+2026-10-07; the links now sit in the tracks table). No browser involved.
 
 **Slice 3 — browser runtime.** A headed Playwright browser on a persistent profile, a
 login script, the `GateAdapter` contract and step runner, a shared blocker detector,
@@ -67,7 +68,9 @@ Get the most out of what SoundCloud allows, without a browser:
 2. **Download zip.** `GET /api/playlists/:id/archive` streams a playlist's verified
    files as one stored zip (zip64 when needed); a button on the playlist page.
 3. **Buy list stays**; the **Manual list** page now lists gate tracks with their links
-   (CSV export) for the owner to complete by hand.
+   (CSV export) for the owner to complete by hand. *(2026-10-07: both pages, the Evals
+   page and the CSV export are gone. Every track's store or gate link is the
+   **HQ Download** column of its playlist.)*
 
 ## SoundCloud login for downloads (2026-10-06)
 

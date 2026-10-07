@@ -51,7 +51,7 @@ Invalid tool input returns an error `tool_result` (the model can correct itself)
 
 - `finish` called **and** a verified download exists -> `done`.
 - `finish` called without a verified download -> tell the model verification failed and continue; after 2 failed `finish` calls -> `needs_human: unexpected_page`.
-- `give_up` -> `impossible` with the reason and detail (-> manual list).
+- `give_up` -> `impossible` with the reason and detail (-> the track is marked `MANUAL` with that reason).
 - `request_human` -> `needs_human`.
 - **Max steps** (env `AGENT_MAX_STEPS`, default 40) reached -> `needs_human: agent_request` with "The agent ran out of steps; finish the gate in the browser or give up." Not a failure, not manual.
 - **Cost ceiling** per job (env `AGENT_MAX_COST_USD`) reached -> same as max steps.

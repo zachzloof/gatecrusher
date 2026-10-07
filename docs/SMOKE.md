@@ -59,9 +59,9 @@ Expected afterwards:
 
 ### 3. What a non-native track does
 
-Add a playlist that also has a gate track and a buy track. Neither gets a job. The gate
-track is on **Manual list** with its link; the buy track on **Buy list**. Both pages
-export CSV. Nothing is fetched for either, and nothing is fetched for "No download"
+Add a playlist that also has a gate track and a buy track. Neither gets a job. Each shows
+its gate or store link in the **HQ Download** column of the tracks table (an icon below
+768px wide). Nothing is fetched for either, and nothing is fetched for "No download"
 tracks: the worker log shows no yt-dlp run for them.
 
 ### 4. If a track ends up Manual or Failed

@@ -3,8 +3,6 @@
 import type { Page } from "@playwright/test";
 import type {
   AddPlaylistResponse,
-  BuyListResponse,
-  GateListResponse,
   ListPlaylistsResponse,
   PlaylistDetailResponse,
   SoundcloudAccountResponse,
@@ -96,32 +94,6 @@ export const PLAYLISTS: ListPlaylistsResponse = {
   ],
 };
 
-export const BUY_LIST: BuyListResponse = {
-  items: TRACKS.filter((item) => item.classification === "buy").map((item) => ({
-    trackId: item.id,
-    store: item.purchaseUrl?.includes("bandcamp") === true ? "Bandcamp" : "Beatport",
-    title: item.title,
-    artist: item.artist,
-    purchaseUrl: item.purchaseUrl ?? "",
-    permalinkUrl: item.permalinkUrl,
-    playlistId: PLAYLIST_ID,
-    playlistTitle: "Fixture Crate",
-  })),
-};
-
-export const GATE_LIST: GateListResponse = {
-  items: TRACKS.filter((item) => item.classification === "gate").map((item) => ({
-    trackId: item.id,
-    platform: item.gatePlatform ?? "unknown",
-    title: item.title,
-    artist: item.artist,
-    gateUrl: item.purchaseUrl ?? "",
-    permalinkUrl: item.permalinkUrl,
-    playlistId: PLAYLIST_ID,
-    playlistTitle: "Fixture Crate",
-  })),
-};
-
 export const CONNECTED: SoundcloudAccountResponse = {
   connected: true,
   username: "burner-digger",
@@ -134,8 +106,6 @@ export interface FakeApi {
   account?: SoundcloudAccountResponse;
   playlists?: ListPlaylistsResponse;
   detail?: PlaylistDetailResponse;
-  buyList?: BuyListResponse;
-  gateList?: GateListResponse;
 }
 
 /** Answers the data routes from memory. Routes that are not listed stay real. */
@@ -155,10 +125,6 @@ export async function fakeApi(page: Page, api: FakeApi = {}): Promise<void> {
     route.request().method() === "GET"
       ? route.fulfill(json(api.account ?? { connected: false }))
       : route.fallback(),
-  );
-  await page.route("**/api/buy-list", (route) => route.fulfill(json(api.buyList ?? { items: [] })));
-  await page.route("**/api/gate-list", (route) =>
-    route.fulfill(json(api.gateList ?? { items: [] })),
   );
   if (api.detail !== undefined) {
     const { detail } = api;

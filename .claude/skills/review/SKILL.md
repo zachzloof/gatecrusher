@@ -24,7 +24,7 @@ After building a slice and getting `pnpm lint && pnpm typecheck && pnpm test` gr
 - [ ] No code attempts, solves, or interacts with a captcha or anti-bot check; no stealth/evasion libraries or flags
 - [ ] No path where a captcha, email confirmation, login challenge, or unexpected page ends in `FAILED` or `MANUAL` — they all become `needs_human`
 - [ ] `MANUAL` is only reachable via `dead_link`, `file_gone`, `account_required`, `user_gave_up`, and always stores reason + link
-- [ ] Nothing clicks purchase/checkout controls; buy links only ever go to the buy list
+- [ ] Nothing clicks purchase/checkout controls; buy links are only ever shown as the HQ Download link
 - [ ] SoundCloud login is only the pasted `oauth_token` (hard rule 5): no password is asked for, stored or typed; the token leaves `soundcloud_account` only for yt-dlp's temporary cookie file (deleted after the job), and never reaches a log, an error message, an API response, the UI or a command line
 - [ ] Worker browser is headed, persistent profile, concurrency 1, all actions go through the randomised delay helper
 

@@ -21,7 +21,7 @@ Monorepo, DB schema, Docker Compose, natively-run worker, CI workflow, empty UI 
 - [ ] Worker starts natively with `pnpm --filter @gatecrusher/worker dev`, validates env, connects to Postgres and Redis, processes a no-op `ping` job, and logs with pino
 - [ ] Env validated with zod at startup in web and worker; `.env.example` complete; bad env exits with a clear message
 - [ ] `.gitignore` covers `.env*` (not `.env.example`), `data/`, build output, Playwright artefacts
-- [ ] UI shell: dark theme with the design tokens from `frontend-design`, nav (Playlists, Runs, Buy list, Manual list, Evals, Settings), each page showing its empty state; responsive at 375 / 768 / 1280px
+- [ ] UI shell: dark theme with the design tokens from `frontend-design`, nav (Playlists, Runs, Buy list, Manual list, Evals, Settings — the three list pages were removed on 2026-10-07), each page showing its empty state; responsive at 375 / 768 / 1280px
 - [ ] `/api/health` reports DB, Redis, and worker-heartbeat status; the shell shows a "worker offline" banner when there is no heartbeat
 - [ ] GitHub Actions workflow runs lint, typecheck, unit + integration tests (Postgres/Redis services), and UI e2e
 - [ ] One e2e test: shell loads, nav works
@@ -31,7 +31,7 @@ Monorepo, DB schema, Docker Compose, natively-run worker, CI workflow, empty UI 
 
 ## Slice 2 — Ingest + classify
 
-Resolve a SoundCloud playlist, persist tracks, classify each one. UI: paste URL, tracks table, buy list, CSV export.
+Resolve a SoundCloud playlist, persist tracks, classify each one. UI: paste URL, tracks table, buy list, CSV export (buy list and CSV export removed on 2026-10-07: the links live in the tracks table's HQ Download column).
 
 **Acceptance criteria**
 
@@ -120,6 +120,9 @@ Browser-agent adapter for unknown gates, `request_human` wired into the same pau
 ---
 
 ## Slice 6 — Manual list + evals + deploy
+
+> **Dropped 2026-10-07:** the manual list, buy list and evals pages were removed along with
+> the AI direction. The manual-list and evals criteria below are no longer planned.
 
 True manual list, in-app run status, evals page, production setup and deploy notes. No push, browser, or outbound notifications — the user checks the app.
 

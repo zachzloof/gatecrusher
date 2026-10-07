@@ -1,34 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import type { TrackDto } from "../lib/api-schemas";
-import { DETAIL, fakeApi, GATE_LIST, PLAYLIST_ID, TRACKS } from "./fixtures";
-
-test("the manual list shows gate tracks with their links and exports them", async ({ page }) => {
-  await fakeApi(page, { gateList: GATE_LIST });
-  await page.goto("/manual-list");
-
-  const rows = page.getByRole("table", { name: "Gate tracks" }).locator("tbody tr");
-  await expect(rows).toHaveCount(2);
-  await expect(rows.first()).toContainText("hypeddit");
-  await expect(rows.first()).toContainText("Gated Bootleg");
-  await expect(rows.first().getByRole("link").first()).toHaveAttribute(
-    "href",
-    "https://hypeddit.com/track/fixture1",
-  );
-  await expect(rows.nth(1)).toContainText("unknown");
-  await expect(page.getByText(/automating gates is paused/i)).toBeVisible();
-
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export CSV" }).click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(/^gatecrusher-gate-list-\d{4}-\d{2}-\d{2}\.csv$/);
-  const csv = await readFile(await download.path(), "utf8");
-  expect(csv).toContain("Gate,Title,Artist,Link,Playlist,SoundCloud");
-  expect(csv).toContain(
-    "hypeddit,Gated Bootleg,Fixture Artist,https://hypeddit.com/track/fixture1",
-  );
-});
+import { DETAIL, fakeApi, PLAYLIST_ID, TRACKS } from "./fixtures";
 
 test("a playlist with downloaded files offers them as one zip", async ({ page }) => {
   const first = TRACKS[0];

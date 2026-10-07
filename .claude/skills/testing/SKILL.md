@@ -48,7 +48,7 @@ Postgres for integration tests comes from Docker Compose (`docker compose up -d`
 
 The UI against a running web app with a seeded database and a **fake worker** (a script that writes events/states), so e2e does not need a real browser-automation run:
 
-- paste URL -> tracks table and buy list render; CSV export downloads
+- paste URL -> tracks table renders with the HQ Download links; filter and sort work
 - run page shows live status changes over SSE
 - Needs-you card appears with screenshot; Continue and Give up work
 - retry on a failed job

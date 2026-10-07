@@ -106,7 +106,7 @@ Details, timeouts and restart behaviour: `.claude/skills/human-in-the-loop/SKILL
 
 | Package | Owns | Must not |
 | --- | --- | --- |
-| `apps/web` | UI, API route handlers, SSE, CSV export, enqueueing | Drive a browser; contain gate logic |
+| `apps/web` | UI, API route handlers, SSE, enqueueing | Drive a browser; contain gate logic |
 | `apps/worker` | The job loop, the heartbeat, browser lifecycle, step runner wiring, parked pages, download storage, startup reconciliation | Serve HTTP to the UI |
 | `apps/desktop` | The Electron shell: access code and end date, private Postgres, starting web and worker, the installer | Contain app logic: it only starts and stops the other pieces |
 | `packages/db` | Drizzle schema, migrations, repository functions | Contain business rules |
@@ -142,7 +142,7 @@ stateDiagram-v2
     MANUAL --> [*]
 ```
 
-`buy` and `none` tracks never get a browser job; they go straight to the buy list or are shown as having no download.
+`buy` and `none` tracks never get a browser job; a `buy` track shows its store link in the playlist's HQ Download column, a `none` track is shown as having no download.
 
 ## Adapter selection
 

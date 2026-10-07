@@ -3,8 +3,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "./client.ts";
 import {
   getPlaylistWithTracks,
-  listBuyTracks,
-  listGateTracks,
   listPlaylistDownloads,
   listPlaylists,
   savePlaylistIngest,
@@ -272,8 +270,8 @@ describe("getPlaylistWithTracks", () => {
   });
 });
 
-describe("listGateTracks and listPlaylistDownloads", () => {
-  it("lists gate tracks with their platform, and a playlist's files in order", async () => {
+describe("listPlaylistDownloads", () => {
+  it("lists a playlist's files in order", async () => {
     const { playlistId } = await savePlaylistIngest(
       db,
       ingest({
@@ -292,11 +290,6 @@ describe("listGateTracks and listPlaylistDownloads", () => {
     await addDownload(await trackIdFor(playlistId, "3"));
     await addDownload(await trackIdFor(playlistId, "1"));
 
-    const gates = await listGateTracks(db);
-    expect(gates.map((row) => [row.title, row.gatePlatform, row.purchaseUrl])).toEqual([
-      ["Track 2", "hypeddit", "https://hypeddit.com/track/two"],
-    ]);
-
     const archive = await listPlaylistDownloads(db, playlistId);
     expect(archive?.playlist.title).toBe("Fixture crate");
     expect(archive?.files.map((file) => [file.position, file.title, file.filePath])).toEqual([
@@ -304,35 +297,5 @@ describe("listGateTracks and listPlaylistDownloads", () => {
       [2, "Track 3", "downloads/fixture/file.mp3"],
     ]);
     expect(await listPlaylistDownloads(db, "00000000-0000-4000-8000-000000000000")).toBeNull();
-  });
-});
-
-describe("listBuyTracks", () => {
-  it("returns only buy tracks, with their playlist", async () => {
-    const { playlistId } = await savePlaylistIngest(
-      db,
-      ingest({
-        tracks: [
-          track("1", { classification: "gate", gatePlatform: "hypeddit" }),
-          track("2", {
-            classification: "buy",
-            purchaseUrl: "https://fixture-label.bandcamp.com/track/two",
-            purchaseTitle: "Buy",
-          }),
-          track("3", { classification: "buy", purchaseUrl: "https://www.beatport.com/track/x/1" }),
-        ],
-      }),
-    );
-
-    const rows = await listBuyTracks(db);
-
-    expect(rows.map((row) => row.title)).toEqual(["Track 2", "Track 3"]);
-    expect(rows[0]).toMatchObject({
-      artist: "Fixture Artist",
-      purchaseUrl: "https://fixture-label.bandcamp.com/track/two",
-      purchaseTitle: "Buy",
-      playlistId,
-      playlistTitle: "Fixture crate",
-    });
   });
 });

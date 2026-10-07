@@ -105,8 +105,7 @@ that browser ends the token; connect again with a fresh one.
    between each, and verifies every file. Rows go Queued → Running → Downloaded.
 3. **Download zip** bundles the playlist's verified files into one archive. Files also
    sit in `data/downloads/<playlist-slug>/`.
-4. **Buy list** and **Manual list** (gate tracks) have the links to handle yourself, each
-   with **Export CSV**.
+4. The **HQ Download** column has each track's store or gate link to handle yourself.
 
 Don't run step 2 while SoundCloud is showing your network an "unusual activity"
 warning in an ordinary browser; wait for that to clear first.

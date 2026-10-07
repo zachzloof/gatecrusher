@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
-import { ADDED, BUY_LIST, DETAIL, fakeApi, PLAYLIST_ID, PLAYLIST_URL, PLAYLISTS } from "./fixtures";
+import { ADDED, DETAIL, fakeApi, PLAYLIST_ID, PLAYLIST_URL, PLAYLISTS } from "./fixtures";
 
 /** Fakes the ingest: POST /api/playlists answers as if the playlist had been stored. */
 async function fakeIngest(page: Page, status: number, body: unknown): Promise<void> {
@@ -21,10 +20,8 @@ async function addPlaylist(page: Page, url: string): Promise<void> {
 
 const trackRows = (page: Page) => page.getByRole("table", { name: "Tracks" }).locator("tbody tr");
 
-test("paste a URL, see the classified tracks, filter them, export the buy list", async ({
-  page,
-}) => {
-  await fakeApi(page, { detail: DETAIL, buyList: BUY_LIST });
+test("paste a URL, see the classified tracks, filter and sort them", async ({ page }) => {
+  await fakeApi(page, { detail: DETAIL });
   await fakeIngest(page, 201, ADDED);
 
   // Paste URL -> the playlist page with its tracks table.
@@ -61,34 +58,6 @@ test("paste a URL, see the classified tracks, filter them, export the buy list",
 
   await filters.getByRole("button", { name: /^All/ }).click();
   await expect(trackRows(page)).toHaveCount(6);
-
-  // Buy list -> export CSV.
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: "Buy list", exact: true })
-    .click();
-  const buyRows = page.getByRole("table", { name: "Tracks to buy" }).locator("tbody tr");
-  await expect(buyRows).toHaveCount(2);
-  await expect(buyRows.first()).toContainText("Bandcamp");
-  await expect(buyRows.first()).toContainText('Night "Drive", Pt. 2');
-  await expect(buyRows.first().getByRole("link").first()).toHaveAttribute(
-    "href",
-    "https://fixture-label.bandcamp.com/track/night-drive",
-  );
-
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export CSV" }).click(),
-  ]);
-  expect(download.suggestedFilename()).toMatch(/^gatecrusher-buy-list-\d{4}-\d{2}-\d{2}\.csv$/);
-  expect(await readFile(await download.path(), "utf8")).toBe(
-    [
-      "﻿Store,Title,Artist,Link,Playlist,SoundCloud",
-      'Bandcamp,"Night ""Drive"", Pt. 2","\'=Fixture, The",https://fixture-label.bandcamp.com/track/night-drive,Fixture Crate,https://soundcloud.com/fixture-artist/track-2',
-      "Beatport,Label Release,Fixture Artist,https://www.beatport.com/track/label-release/107,Fixture Crate,https://soundcloud.com/fixture-artist/track-5",
-      "",
-    ].join("\r\n"),
-  );
 });
 
 test("the playlists page lists playlists and opens one", async ({ page }) => {
@@ -186,15 +155,6 @@ test.describe("error states", () => {
     await fakeApi(page, { playlists: PLAYLISTS });
     await alert.getByRole("button", { name: "Try again" }).click();
     await expect(page.getByRole("list", { name: "Playlists" })).toContainText("Fixture Crate");
-  });
-
-  test("the buy list explains a failed load and cannot export", async ({ page }) => {
-    await page.goto("/buy-list");
-
-    await expect(
-      page.getByRole("alert").filter({ hasText: "Could not load the buy list" }),
-    ).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByRole("button", { name: "Export CSV" })).toBeDisabled();
   });
 
   test("an unknown playlist says it is not in Gatecrusher", async ({ page }) => {

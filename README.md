@@ -78,7 +78,7 @@ classifies each one:
 | --------------- | --------------------------------------------------------------------------- |
 | **Native**      | SoundCloud's own download button is enabled                                 |
 | **Gate**        | The track's link goes to a free-download gate or file host (platform shown) |
-| **Buy**         | The link goes to a store; listed on **Buy list**, exportable as CSV         |
+| **Buy**         | The link goes to a store, shown in the **HQ Download** column               |
 | **No download** | No usable link                                                              |
 
 Adding the same playlist again updates it in place. If api-v2 cannot be used,
@@ -105,8 +105,8 @@ are skipped on the next click; failed ones are retried. If SoundCloud answers 40
 **Download zip** on the playlist page bundles every verified file of that playlist into
 one archive, streamed straight from disk.
 
-**Buy list** and **Manual list** hold the tracks with a store link or a free-download
-gate link, each exportable as CSV, for you to handle in your own browser.
+The **HQ Download** column on each playlist has the store or free-download gate link of
+every track, for you to handle in your own browser.
 
 The manual check is in [docs/SMOKE.md](docs/SMOKE.md).
 
@@ -186,7 +186,7 @@ first. The worker still runs on the host either way.
 apps/web         Next.js App Router UI and API route handlers
 apps/worker      The job loop (yt-dlp downloads), the paused headed-browser path, the login script
 apps/desktop     Electron shell and installer: private Postgres, web and worker in one app
-packages/core    Shared types, zod schemas, track classifier, CSV, job state machine. No I/O
+packages/core    Shared types, zod schemas, track classifier, job state machine. No I/O
 packages/db      Drizzle schema, migrations, repository functions, seed
 packages/gates   Step runner, registry, blocker detector, download verification, adapters
 ```

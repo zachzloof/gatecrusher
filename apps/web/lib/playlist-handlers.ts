@@ -1,11 +1,9 @@
-// The logic behind the playlist and buy-list routes, with everything they touch passed
+// The logic behind the playlist routes, with everything they touch passed
 // in, so tests can run them against a throwaway database and fake sources.
-import { canonicalPlaylistUrl, storeNameForUrl } from "@gatecrusher/core";
+import { canonicalPlaylistUrl } from "@gatecrusher/core";
 import {
   getPlaylistTrackStates,
   getPlaylistWithTracks,
-  listBuyTracks,
-  listGateTracks,
   listPlaylists,
   type Database,
   type PlaylistRow,
@@ -15,8 +13,6 @@ import { z } from "zod";
 import {
   addPlaylistRequestSchema,
   addPlaylistResponseSchema,
-  buyListResponseSchema,
-  gateListResponseSchema,
   listPlaylistsResponseSchema,
   playlistDetailResponseSchema,
   type PlaylistDto,
@@ -185,63 +181,6 @@ export function handleGetPlaylist(playlistId: string, deps: HandlerDeps): Promis
           purchaseTitle: track.purchaseTitle,
           ...toRunStateDto(states.get(track.id)),
         })),
-      }),
-      { headers: NO_STORE },
-    );
-  });
-}
-
-/** GET /api/gate-list — gate tracks with their links, for the owner to do by hand. */
-export function handleGateList(deps: HandlerDeps): Promise<Response> {
-  return guarded(deps.log, "GET /api/gate-list", async () => {
-    const rows = await withTimeout(listGateTracks(deps.db), READ_TIMEOUT_MS);
-    return Response.json(
-      gateListResponseSchema.parse({
-        items: rows.flatMap((row) => {
-          // A gate track always has a link; a row without one has nothing to open.
-          if (row.purchaseUrl === null) return [];
-          return [
-            {
-              trackId: row.trackId,
-              platform: row.gatePlatform ?? "unknown",
-              title: row.title,
-              artist: row.artist,
-              gateUrl: row.purchaseUrl,
-              permalinkUrl: row.permalinkUrl,
-              playlistId: row.playlistId,
-              playlistTitle: row.playlistTitle,
-            },
-          ];
-        }),
-      }),
-      { headers: NO_STORE },
-    );
-  });
-}
-
-/** GET /api/buy-list */
-export function handleBuyList(deps: HandlerDeps): Promise<Response> {
-  return guarded(deps.log, "GET /api/buy-list", async () => {
-    const rows = await withTimeout(listBuyTracks(deps.db), READ_TIMEOUT_MS);
-    return Response.json(
-      buyListResponseSchema.parse({
-        items: rows.flatMap((row) => {
-          const store = storeNameForUrl(row.purchaseUrl);
-          // A buy track always has a link; a row without one cannot be bought from.
-          if (store === null || row.purchaseUrl === null) return [];
-          return [
-            {
-              trackId: row.trackId,
-              store,
-              title: row.title,
-              artist: row.artist,
-              purchaseUrl: row.purchaseUrl,
-              permalinkUrl: row.permalinkUrl,
-              playlistId: row.playlistId,
-              playlistTitle: row.playlistTitle,
-            },
-          ];
-        }),
       }),
       { headers: NO_STORE },
     );
