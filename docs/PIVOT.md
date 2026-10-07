@@ -104,6 +104,17 @@ sign-in page would run into the anti-bot check again (hard rule 1). So the login
   so an expired or missing login is a retryable **Failed** ("Connect SoundCloud again in
   Settings") instead of **Manual · file gone**.
 - Hard rule 5 in CLAUDE.md was rewritten to match.
+- **From my SoundCloud** (2026-10-07): the Add playlist dialog has a second source
+  next to the pasted URL: a searchable grid of the connected account's own and liked
+  playlists, with covers. `GET /api/soundcloud-account/playlists` reads the token from
+  Postgres and lists, with the token in the Authorization header (the same way `/me`
+  checks it), the signed-in library (`/me/library/all`, the one listing that includes
+  the account's private playlists), then the public profile listings
+  (`/users/{id}/playlists_without_albums`, `/users/{id}/albums`,
+  `/users/{id}/playlists/liked_and_owned`), own ones before likes; the answer never
+  carries the token. A private playlist is handed over by its share-token URL, so adding it
+  goes through the ordinary ingest. 409 when nothing is connected,
+  422 when SoundCloud no longer accepts the token.
 
 The token stops working when that browser signs out of SoundCloud; reconnecting is the
 same paste.

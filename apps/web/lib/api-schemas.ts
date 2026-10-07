@@ -163,6 +163,42 @@ export const soundcloudAccountResponseSchema = z.discriminatedUnion("connected",
 ]);
 export type SoundcloudAccountResponse = z.infer<typeof soundcloudAccountResponseSchema>;
 
+/** One playlist of the connected SoundCloud account, own or liked. */
+export const myPlaylistSchema = z.object({
+  soundcloudId: z.string(),
+  title: z.string(),
+  /** Ready to add: a private playlist's URL carries its share token. */
+  url: soundcloudPlaylistUrlSchema,
+  artworkUrl: z.string().nullable(),
+  owner: z.string().nullable(),
+  trackCount: z.number().int().nonnegative(),
+  isPrivate: z.boolean(),
+  /** Someone else's playlist the account liked, rather than its own. */
+  liked: z.boolean(),
+});
+export type MyPlaylistDto = z.infer<typeof myPlaylistSchema>;
+
+/** What one SoundCloud listing contributed, so a missing playlist can be traced. */
+export const listingReportSchema = z.object({
+  /** The api-v2 path, e.g. `/me/library/all`. */
+  path: z.string(),
+  /** Items SoundCloud returned, or null when it has no such listing. */
+  items: z.number().int().nonnegative().nullable(),
+  /** Items that were usable playlists (before duplicates are folded). */
+  playlists: z.number().int().nonnegative(),
+  /** Playlists that could not be used: no link, or a link that is not a playlist URL. */
+  unusable: z.number().int().nonnegative(),
+  /** Items that were not playlists at all (system playlists, ...). */
+  other: z.number().int().nonnegative(),
+});
+export type ListingReport = z.infer<typeof listingReportSchema>;
+
+export const myPlaylistsResponseSchema = z.object({
+  playlists: z.array(myPlaylistSchema),
+  listings: z.array(listingReportSchema),
+});
+export type MyPlaylistsResponse = z.infer<typeof myPlaylistsResponseSchema>;
+
 /** The `oauth_token` cookie value the owner copied from their browser. */
 export const connectSoundcloudRequestSchema = z.object({
   token: soundcloudTokenSchema,

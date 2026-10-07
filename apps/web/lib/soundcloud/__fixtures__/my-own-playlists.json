@@ -1,0 +1,41 @@
+{
+  "collection": [
+    {
+      "id": 9010,
+      "kind": "playlist",
+      "title": "Warm Up Selections",
+      "permalink_url": "https://soundcloud.com/burner-digger/sets/warm-up-selections",
+      "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9010-large.jpg",
+      "sharing": "public",
+      "secret_token": null,
+      "track_count": 18,
+      "is_album": false,
+      "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null }
+    },
+    {
+      "id": 9011,
+      "kind": "playlist",
+      "title": "Unreleased Edits",
+      "permalink_url": "https://soundcloud.com/burner-digger/sets/unreleased-edits",
+      "artwork_url": null,
+      "sharing": "private",
+      "secret_token": "s-OwNpRiV2",
+      "track_count": 5,
+      "is_album": false,
+      "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null }
+    },
+    {
+      "id": 9001,
+      "kind": "playlist",
+      "title": "Fixture Crate",
+      "permalink_url": "https://soundcloud.com/fixture-curator/sets/fixture-crate",
+      "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9001-large.jpg",
+      "sharing": "public",
+      "secret_token": null,
+      "track_count": 7,
+      "is_album": false,
+      "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null }
+    }
+  ],
+  "next_href": null
+}

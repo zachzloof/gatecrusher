@@ -1,0 +1,37 @@
+{
+  "collection": [
+    {
+      "created_at": "2026-08-20T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9005,
+        "kind": "playlist",
+        "title": "",
+        "permalink_url": "https://soundcloud.com/burner-digger/sets/untitled-9005",
+        "artwork_url": null,
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": null,
+        "is_album": false,
+        "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null },
+        "tracks": []
+      }
+    },
+    {
+      "created_at": "2026-08-19T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9001,
+        "kind": "playlist",
+        "title": "Fixture Crate (listed twice)",
+        "permalink_url": "https://soundcloud.com/fixture-curator/sets/fixture-crate",
+        "artwork_url": null,
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 7,
+        "user": { "username": "burner-digger" }
+      }
+    }
+  ],
+  "next_href": null
+}

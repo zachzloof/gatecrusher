@@ -71,3 +71,33 @@ export const ytDlpPlaylistSchema = z.object({
   /** `null` entries are tracks yt-dlp could not read. */
   entries: z.array(z.unknown()).nullish(),
 });
+
+/** A playlist as the library endpoints list it: the playlist itself, no tracks needed. */
+export const apiLibraryPlaylistSchema = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  permalink_url: z.string().nullish(),
+  artwork_url: z.string().nullish(),
+  sharing: z.string().nullish(),
+  secret_token: z.string().nullish(),
+  track_count: z.number().nullish(),
+  user: apiUserSchema.nullish(),
+  /** The first few tracks, when the endpoint includes them; only their artwork is used. */
+  tracks: z.array(z.object({ artwork_url: z.string().nullish() })).nullish(),
+});
+export type ApiLibraryPlaylist = z.infer<typeof apiLibraryPlaylistSchema>;
+
+/**
+ * One entry of a library listing. The endpoint wraps each playlist in an item that says
+ * whether it is the account's own or a liked one; a bare playlist is accepted too.
+ */
+export const apiLibraryItemSchema = z.union([
+  z.object({ type: z.string().nullish(), playlist: apiLibraryPlaylistSchema }),
+  apiLibraryPlaylistSchema.extend({ kind: z.literal("playlist") }),
+]);
+
+/** A paged api-v2 listing: `collection` plus the URL of the next page, if any. */
+export const apiPagedResponseSchema = z.object({
+  collection: z.array(z.unknown()),
+  next_href: z.string().nullish(),
+});

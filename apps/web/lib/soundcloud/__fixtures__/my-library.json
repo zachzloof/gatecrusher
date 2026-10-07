@@ -1,0 +1,58 @@
+{
+  "collection": [
+    {
+      "created_at": "2026-09-25T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9011,
+        "kind": "playlist",
+        "title": "Unreleased Edits",
+        "permalink_url": "https://soundcloud.com/burner-digger/sets/unreleased-edits",
+        "artwork_url": null,
+        "sharing": "private",
+        "secret_token": "s-OwNpRiV2",
+        "track_count": 5,
+        "is_album": false,
+        "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null }
+      }
+    },
+    {
+      "created_at": "2026-09-22T10:00:00Z",
+      "type": "system-playlist",
+      "system_playlist": { "id": "soundcloud:system-playlists:fixture", "kind": "system-playlist" }
+    },
+    {
+      "created_at": "2026-09-20T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9010,
+        "kind": "playlist",
+        "title": "Warm Up Selections",
+        "permalink_url": "https://soundcloud.com/burner-digger/sets/warm-up-selections",
+        "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9010-large.jpg",
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 18,
+        "is_album": false,
+        "user": { "id": 290123, "kind": "user", "username": "burner-digger", "avatar_url": null }
+      }
+    },
+    {
+      "created_at": "2026-09-10T10:00:00Z",
+      "type": "playlist-like",
+      "playlist": {
+        "id": 9003,
+        "kind": "playlist",
+        "title": "Peak Time Techno",
+        "permalink_url": "https://soundcloud.com/other-dj/sets/peak-time-techno",
+        "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9003-large.jpg",
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 40,
+        "is_album": false,
+        "user": { "id": 777, "kind": "user", "username": "other-dj", "avatar_url": null }
+      }
+    }
+  ],
+  "next_href": null
+}

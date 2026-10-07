@@ -3,7 +3,9 @@
 import type { Page } from "@playwright/test";
 import type {
   AddPlaylistResponse,
+  ApiError,
   ListPlaylistsResponse,
+  MyPlaylistsResponse,
   PlaylistDetailResponse,
   SoundcloudAccountResponse,
   TrackDto,
@@ -101,11 +103,57 @@ export const CONNECTED: SoundcloudAccountResponse = {
   verifiedAt: "2026-10-06T09:30:00.000Z",
 };
 
+/** The connected account's own playlists, as the picker lists them. */
+export const MY_PLAYLISTS: MyPlaylistsResponse = {
+  playlists: [
+    {
+      soundcloudId: "9001",
+      title: "Fixture Crate",
+      url: PLAYLIST_URL,
+      artworkUrl: null,
+      owner: "burner-digger",
+      trackCount: 7,
+      isPrivate: false,
+      liked: false,
+    },
+    {
+      soundcloudId: "9002",
+      title: "Secret Weapons",
+      url: "https://soundcloud.com/burner-digger/sets/secret-weapons/s-FiXtUrE1",
+      artworkUrl: null,
+      owner: "burner-digger",
+      trackCount: 12,
+      isPrivate: true,
+      liked: false,
+    },
+    {
+      soundcloudId: "9003",
+      title: "Peak Time Techno",
+      url: "https://soundcloud.com/other-dj/sets/peak-time-techno",
+      artworkUrl: null,
+      owner: "other-dj",
+      trackCount: 40,
+      isPrivate: false,
+      liked: true,
+    },
+  ],
+  listings: [{ path: "/me/library/all", items: 3, playlists: 3, unusable: 0, other: 0 }],
+};
+
+export const NOT_CONNECTED: ApiError = {
+  error: {
+    code: "soundcloud_not_connected",
+    message: "Connect a SoundCloud account first to pick from its playlists.",
+  },
+};
+
 export interface FakeApi {
   /** What GET /api/soundcloud-account answers. Default: nobody connected. */
   account?: SoundcloudAccountResponse;
   playlists?: ListPlaylistsResponse;
   detail?: PlaylistDetailResponse;
+  /** What GET /api/soundcloud-account/playlists answers. Default: nobody connected (409). */
+  myPlaylists?: MyPlaylistsResponse | { status: number; body: ApiError };
 }
 
 /** Answers the data routes from memory. Routes that are not listed stay real. */
@@ -126,6 +174,12 @@ export async function fakeApi(page: Page, api: FakeApi = {}): Promise<void> {
       ? route.fulfill(json(api.account ?? { connected: false }))
       : route.fallback(),
   );
+  await page.route("**/api/soundcloud-account/playlists", (route) => {
+    const mine = api.myPlaylists ?? { status: 409, body: NOT_CONNECTED };
+    return route.fulfill(
+      "status" in mine ? { ...json(mine.body), status: mine.status } : json(mine),
+    );
+  });
   if (api.detail !== undefined) {
     const { detail } = api;
     await page.route(`**/api/playlists/${detail.playlist.id}`, (route) =>

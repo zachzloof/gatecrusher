@@ -36,6 +36,13 @@ export interface FakeSoundcloudOptions {
   homeStatus?: number;
   /** The login token `/me` accepts, and who it belongs to. Default: none is accepted. */
   me?: { token: string; status?: number; body: unknown };
+  /**
+   * What the playlist listings of user `userId` answer the holder of `token`: for each
+   * listing path under `/users/{id}/` (e.g. `albums`) or `/me/` (e.g. `me/library/all`),
+   * one response per request in order. A path not listed answers 404. Default: no
+   * token is accepted.
+   */
+  library?: { token: string; userId: string; listings: Record<string, FakeResponse[]> };
 }
 
 export interface FakeSoundcloud {
@@ -87,6 +94,22 @@ export function createFakeSoundcloud(options: FakeSoundcloudOptions = {}): FakeS
           return json({ status: 401, body: {} });
         }
         return json({ status: me.status ?? 200, body: me.body });
+      }
+      const library = /^\/(?:users\/([^/]+)|me)\/(.+)$/.exec(url.pathname);
+      if (library !== null) {
+        const configured = options.library;
+        if (
+          configured === undefined ||
+          (library[1] ?? configured.userId) !== configured.userId ||
+          sent.Authorization !== `OAuth ${configured.token}`
+        ) {
+          return json({ status: 401, body: {} });
+        }
+        // Pages are served in request order; `requests` already holds this one.
+        const index = requests.filter((seen) => seen.pathname === url.pathname).length - 1;
+        const key = library[1] === undefined ? `me/${library[2] ?? ""}` : (library[2] ?? "");
+        const page = configured.listings[key]?.[index];
+        return page === undefined ? json({ status: 404, body: {} }) : json(page);
       }
       if (url.pathname === "/tracks") {
         const ids = new Set((url.searchParams.get("ids") ?? "").split(",").map(Number));

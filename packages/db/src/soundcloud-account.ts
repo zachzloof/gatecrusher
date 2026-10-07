@@ -1,5 +1,6 @@
 // The SoundCloud login: an `oauth_token` the owner pasted in, and who it belongs to.
-// Only `getSoundcloudOauthToken` ever reads the token back, for the worker.
+// Only `getSoundcloudOauthToken` ever reads the token back: for the worker's cookie
+// file, and for the web app's own requests to SoundCloud on the owner's behalf.
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "./client.ts";
 import { soundcloudAccount } from "./schema.ts";
@@ -34,7 +35,10 @@ export async function getSoundcloudAccount(db: Database): Promise<SoundcloudAcco
   return row ?? null;
 }
 
-/** For the worker only: the token to hand to yt-dlp, or null when none is connected. */
+/**
+ * The token itself, or null when none is connected. For the worker's yt-dlp cookie
+ * file and the web app's authenticated SoundCloud requests only; never for a response.
+ */
 export async function getSoundcloudOauthToken(db: Database): Promise<string | null> {
   const [row] = await db
     .select({ oauthToken: soundcloudAccount.oauthToken })

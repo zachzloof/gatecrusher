@@ -1,0 +1,101 @@
+{
+  "collection": [
+    {
+      "created_at": "2026-09-20T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9001,
+        "kind": "playlist",
+        "title": "Fixture Crate",
+        "permalink_url": "https://soundcloud.com/fixture-curator/sets/fixture-crate",
+        "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9001-large.jpg",
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 7,
+        "is_album": false,
+        "user": {
+          "id": 290123,
+          "kind": "user",
+          "username": "burner-digger",
+          "permalink_url": "https://soundcloud.com/burner-digger",
+          "avatar_url": "https://i1.sndcdn.com/avatars-fixture-burner-digger-large.jpg"
+        },
+        "tracks": [{ "id": 101, "kind": "track" }]
+      }
+    },
+    {
+      "created_at": "2026-09-18T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9002,
+        "kind": "playlist",
+        "title": "  Secret Weapons  ",
+        "permalink_url": "https://soundcloud.com/burner-digger/sets/secret-weapons",
+        "artwork_url": null,
+        "sharing": "private",
+        "secret_token": "s-FiXtUrE1",
+        "track_count": 12,
+        "is_album": false,
+        "user": {
+          "id": 290123,
+          "kind": "user",
+          "username": "burner-digger",
+          "permalink_url": "https://soundcloud.com/burner-digger",
+          "avatar_url": null
+        },
+        "tracks": [
+          { "id": 201, "kind": "track", "artwork_url": null },
+          {
+            "id": 202,
+            "kind": "track",
+            "artwork_url": "https://i1.sndcdn.com/artworks-fixture-202-large.jpg"
+          }
+        ]
+      }
+    },
+    {
+      "created_at": "2026-09-10T10:00:00Z",
+      "type": "playlist-like",
+      "playlist": {
+        "id": 9003,
+        "kind": "playlist",
+        "title": "Peak Time Techno",
+        "permalink_url": "https://soundcloud.com/other-dj/sets/peak-time-techno",
+        "artwork_url": "https://i1.sndcdn.com/artworks-fixture-9003-large.jpg",
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 40,
+        "is_album": false,
+        "user": {
+          "id": 777,
+          "kind": "user",
+          "username": "other-dj",
+          "permalink_url": "https://soundcloud.com/other-dj",
+          "avatar_url": null
+        }
+      }
+    },
+    {
+      "created_at": "2026-09-01T10:00:00Z",
+      "type": "playlist",
+      "playlist": {
+        "id": 9004,
+        "kind": "playlist",
+        "title": "No Link",
+        "permalink_url": null,
+        "artwork_url": null,
+        "sharing": "public",
+        "secret_token": null,
+        "track_count": 3,
+        "is_album": false,
+        "user": null
+      }
+    },
+    {
+      "created_at": "2026-08-30T10:00:00Z",
+      "type": "system-playlist",
+      "system_playlist": { "id": "soundcloud:system-playlists:fixture" }
+    }
+  ],
+  "next_href": "https://api-v2.soundcloud.com/users/290123/playlists/liked_and_owned?offset=2026-09-01T10%3A00%3A00Z%2Cplaylist%2C9004&limit=200"
+}

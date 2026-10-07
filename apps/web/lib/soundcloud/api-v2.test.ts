@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { fetchPlaylistFromApiV2, HYDRATE_BATCH_SIZE, verifySoundcloudToken } from "./api-v2";
+import {
+  fetchMyPlaylists,
+  fetchPlaylistFromApiV2,
+  HYDRATE_BATCH_SIZE,
+  verifySoundcloudToken,
+} from "./api-v2";
 import { createMemoryClientIdCache, discoverClientId } from "./client-id";
 import {
   createFakeSoundcloud,
@@ -351,5 +356,254 @@ describe("verifySoundcloudToken", () => {
     const { result } = verify({ me: { token: TOKEN, status: 503, body: {} } });
 
     expect(await result).toMatchObject({ ok: false, kind: "unavailable" });
+  });
+});
+
+describe("fetchMyPlaylists", () => {
+  // Made-up value in the shape SoundCloud uses; never a real token.
+  const TOKEN = "2-290123-123456789-aBcDeFgHiJkLmN";
+  const USER_ID = "290123";
+  const page = (body: unknown, status = 200) => ({ status, body });
+  const empty = () => page({ collection: [], next_href: null });
+  /** The signed-in library, the public own playlists, no albums, two pages of likes. */
+  const fixtureListings = () => ({
+    "me/library/all": [page(fixtureJson("my-library.json"))],
+    playlists_without_albums: [page(fixtureJson("my-own-playlists.json"))],
+    albums: [empty()],
+    "playlists/liked_and_owned": [
+      page(fixtureJson("my-playlists-page1.json")),
+      page(fixtureJson("my-playlists-page2.json")),
+    ],
+  });
+
+  function list(options: FakeSoundcloudOptions, userId = USER_ID) {
+    const soundcloud = createFakeSoundcloud(options);
+    const clientIds = createMemoryClientIdCache();
+    clientIds.set(FIXTURE_CLIENT_ID);
+    const listings = (path: string) =>
+      soundcloud.requests.filter(
+        (url) =>
+          url.pathname === (path.startsWith("me/") ? `/${path}` : `/users/${USER_ID}/${path}`),
+      );
+    return {
+      soundcloud,
+      listings,
+      result: fetchMyPlaylists({ fetch: soundcloud.fetch, clientIds }, TOKEN, userId),
+    };
+  }
+
+  it("lists the signed-in library first, then the public listings, each once", async () => {
+    const { listings, result } = list({
+      library: { token: TOKEN, userId: USER_ID, listings: fixtureListings() },
+    });
+
+    const answer = await result;
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.playlists.map((playlist) => playlist.soundcloudId)).toEqual([
+      "9011",
+      "9010",
+      "9003",
+      "9001",
+      "9002",
+      "9005",
+    ]);
+    // An own private playlist, from the signed-in library: the URL carries the share token.
+    expect(answer.playlists[0]).toMatchObject({
+      title: "Unreleased Edits",
+      url: "https://soundcloud.com/burner-digger/sets/unreleased-edits/s-OwNpRiV2",
+      isPrivate: true,
+      liked: false,
+    });
+    // An own playlist, public.
+    expect(answer.playlists[1]).toEqual({
+      soundcloudId: "9010",
+      title: "Warm Up Selections",
+      url: "https://soundcloud.com/burner-digger/sets/warm-up-selections",
+      artworkUrl: "https://i1.sndcdn.com/artworks-fixture-9010-t300x300.jpg",
+      owner: "burner-digger",
+      trackCount: 18,
+      isPrivate: false,
+      liked: false,
+    });
+    // Liked in the library, and listed again among the likes: once.
+    expect(answer.playlists[2]).toMatchObject({ owner: "other-dj", liked: true });
+    // Listed as own and again among the likes: once, as own.
+    expect(answer.playlists[3]).toMatchObject({ title: "Fixture Crate", liked: false });
+    // A private one from the likes listing: the first track's cover stands in.
+    expect(answer.playlists[4]).toMatchObject({
+      title: "Secret Weapons",
+      url: "https://soundcloud.com/burner-digger/sets/secret-weapons/s-FiXtUrE1",
+      artworkUrl: "https://i1.sndcdn.com/artworks-fixture-202-t300x300.jpg",
+      isPrivate: true,
+    });
+    expect(answer.playlists[5]).toMatchObject({
+      title: "Untitled playlist",
+      artworkUrl: null,
+      trackCount: 0,
+    });
+
+    expect(listings("me/library/all")).toHaveLength(1);
+    expect(listings("playlists_without_albums")).toHaveLength(1);
+    expect(listings("albums")).toHaveLength(1);
+    // What each listing contributed: the system playlist is "other", the playlist
+    // without a link "unusable"; duplicates still count as playlists here.
+    expect(answer.listings).toEqual([
+      { path: "/me/library/all", items: 4, playlists: 3, unusable: 0, other: 1 },
+      // Not served by the fake: reported as a listing SoundCloud does not have.
+      { path: "/me/playlists", items: null, playlists: 0, unusable: 0, other: 0 },
+      {
+        path: "/users/290123/playlists_without_albums",
+        items: 3,
+        playlists: 3,
+        unusable: 0,
+        other: 0,
+      },
+      { path: "/users/290123/albums", items: 0, playlists: 0, unusable: 0, other: 0 },
+      {
+        path: "/users/290123/playlists/liked_and_owned",
+        items: 7,
+        playlists: 5,
+        unusable: 1,
+        other: 1,
+      },
+    ]);
+    const likes = listings("playlists/liked_and_owned");
+    expect(likes.map((url) => url.searchParams.get("limit"))).toEqual(["200", "200"]);
+    expect(likes[1]?.searchParams.get("offset")).toBe("2026-09-01T10:00:00Z,playlist,9004");
+    expect(likes[1]?.searchParams.get("client_id")).toBe(FIXTURE_CLIENT_ID);
+  });
+
+  it("sends the token only in the Authorization header", async () => {
+    const { soundcloud, result } = list({
+      library: { token: TOKEN, userId: USER_ID, listings: fixtureListings() },
+    });
+
+    await result;
+    expect(soundcloud.headers.every((sent) => sent.Authorization === `OAuth ${TOKEN}`)).toBe(true);
+    expect(soundcloud.requests.map((url) => url.toString()).join(" ")).not.toContain(TOKEN);
+  });
+
+  it("reports a token SoundCloud refuses as rejected, without repeating it", async () => {
+    const { result } = list({
+      library: { token: "2-other-token-0000000000", userId: USER_ID, listings: fixtureListings() },
+    });
+
+    const answer = await result;
+    expect(answer).toMatchObject({ ok: false, kind: "rejected" });
+    expect(JSON.stringify(answer)).not.toContain(TOKEN);
+  });
+
+  it("reports a listing SoundCloud answers 404 for as missing, and goes on", async () => {
+    const listings = fixtureListings();
+    const { result } = list({
+      library: { token: TOKEN, userId: USER_ID, listings: { ...listings, albums: [] } },
+    });
+
+    const answer = await result;
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.playlists).toHaveLength(6);
+    expect(answer.listings[3]).toEqual({
+      path: "/users/290123/albums",
+      items: null,
+      playlists: 0,
+      unusable: 0,
+      other: 0,
+    });
+  });
+
+  it("does not add the share token twice when the link already carries it", async () => {
+    const { result } = list({
+      library: {
+        token: TOKEN,
+        userId: USER_ID,
+        listings: {
+          "me/library/all": [
+            page({
+              collection: [
+                {
+                  type: "playlist",
+                  playlist: {
+                    id: 42,
+                    kind: "playlist",
+                    title: "Already tokenised",
+                    permalink_url: "https://soundcloud.com/burner-digger/sets/edits/s-AbC123",
+                    sharing: "private",
+                    secret_token: "s-AbC123",
+                  },
+                },
+              ],
+              next_href: null,
+            }),
+          ],
+        },
+      },
+    });
+
+    const answer = await result;
+    if (!answer.ok) throw new Error(answer.reason);
+    expect(answer.playlists.map((playlist) => playlist.url)).toEqual([
+      "https://soundcloud.com/burner-digger/sets/edits/s-AbC123",
+    ]);
+  });
+
+  it("reports SoundCloud being down as unavailable, naming the listing", async () => {
+    const { result } = list({
+      library: {
+        token: TOKEN,
+        userId: USER_ID,
+        listings: { ...fixtureListings(), albums: [page({}, 503)] },
+      },
+    });
+
+    expect(await result).toEqual({
+      ok: false,
+      kind: "unavailable",
+      reason: "/users/290123/albums listing answered 503",
+    });
+  });
+
+  it("reports an unexpected answer as unavailable", async () => {
+    const { result } = list({
+      library: {
+        token: TOKEN,
+        userId: USER_ID,
+        listings: { ...fixtureListings(), playlists_without_albums: [page({ nope: 1 })] },
+      },
+    });
+
+    expect(await result).toMatchObject({ ok: false, kind: "unavailable" });
+  });
+
+  it("stops at an empty page and at a next_href that leaves api-v2", async () => {
+    const elsewhere = page({
+      collection: [
+        {
+          type: "playlist",
+          playlist: {
+            id: 1,
+            kind: "playlist",
+            title: "x",
+            permalink_url: "https://soundcloud.com/a/sets/b",
+          },
+        },
+      ],
+      next_href: "https://evil.example.com/next",
+    });
+    const { listings, result } = list({
+      library: {
+        token: TOKEN,
+        userId: USER_ID,
+        listings: {
+          "me/library/all": [empty()],
+          playlists_without_albums: [empty()],
+          albums: [empty()],
+          "playlists/liked_and_owned": [elsewhere, empty()],
+        },
+      },
+    });
+
+    const answer = await result;
+    expect(answer).toMatchObject({ ok: true });
+    expect(listings("playlists/liked_and_owned")).toHaveLength(1);
   });
 });

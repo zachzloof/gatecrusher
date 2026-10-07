@@ -4,9 +4,14 @@ import { getDb } from "./db";
 import { getEnv } from "./env";
 import { ingestPlaylist } from "./ingest";
 import { getLogger } from "./logger";
+import type { MyPlaylistsHandlerDeps } from "./my-playlists-handlers";
 import type { HandlerDeps } from "./playlist-handlers";
 import type { RunHandlerDeps } from "./run-handlers";
-import { fetchPlaylistFromApiV2, verifySoundcloudToken } from "./soundcloud/api-v2";
+import {
+  fetchMyPlaylists,
+  fetchPlaylistFromApiV2,
+  verifySoundcloudToken,
+} from "./soundcloud/api-v2";
 import { createMemoryClientIdCache, type ClientIdCache } from "./soundcloud/client-id";
 import { execFileRunner } from "./soundcloud/process-runner";
 import { fetchPlaylistFromYtDlp } from "./soundcloud/yt-dlp";
@@ -51,6 +56,17 @@ export function getAccountHandlerDeps(): AccountHandlerDeps {
     db: getDb().db,
     log: getLogger(),
     verifyToken: (oauthToken) => verifySoundcloudToken({ fetch, clientIds }, oauthToken),
+  };
+}
+
+/** The real dependencies of the account's playlist listing: Postgres and api-v2. */
+export function getMyPlaylistsHandlerDeps(): MyPlaylistsHandlerDeps {
+  const clientIds = clientIdCache();
+  return {
+    db: getDb().db,
+    log: getLogger(),
+    listPlaylists: (oauthToken, soundcloudUserId) =>
+      fetchMyPlaylists({ fetch, clientIds }, oauthToken, soundcloudUserId),
   };
 }
 

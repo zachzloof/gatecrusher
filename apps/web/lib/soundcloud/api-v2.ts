@@ -1,8 +1,11 @@
 import type { IngestedTrack } from "@gatecrusher/core";
+import { myPlaylistSchema, type ListingReport, type MyPlaylistDto } from "../api-schemas";
 import { describeError, discoverClientId, type ClientIdCache } from "./client-id";
 import { httpsUrl, trackFromApi } from "./map-track";
 import {
+  apiLibraryItemSchema,
   apiMeSchema,
+  apiPagedResponseSchema,
   apiPlaylistSchema,
   apiResolvedSchema,
   apiTrackSchema,
@@ -191,4 +194,172 @@ export async function fetchPlaylistFromApiV2(
       unavailableCount: orderedIds.length - tracks.length,
     },
   };
+}
+
+/** How many playlists one library page may carry; api-v2's own maximum. */
+export const LIBRARY_PAGE_SIZE = 200;
+/** Enough for 2000 playlists; keeps a broken `next_href` from paging forever. */
+const MAX_LIBRARY_PAGES = 10;
+
+export type MyPlaylistsResult =
+  | { ok: true; playlists: MyPlaylistDto[]; listings: ListingReport[] }
+  /** SoundCloud refused the token: expired, or the account signed out. */
+  | { ok: false; kind: "rejected"; reason: string }
+  | { ok: false; kind: "unavailable"; reason: string };
+
+/** Asks for a bigger rendition of a SoundCloud cover: the listing hands out 100px ones. */
+function largerArtwork(url: string | null): string | null {
+  return url === null ? null : url.replace(/-large\.(jpe?g|png)$/i, "-t300x300.$1");
+}
+
+/** A private playlist's link with its share token, unless the link already carries it. */
+function shareUrl(permalink: string, secretToken: string | null | undefined): string {
+  const secret = secretToken?.trim();
+  const trimmed = permalink.replace(/\/$/, "");
+  if (!secret || trimmed.endsWith(`/${secret}`)) return trimmed;
+  return `${trimmed}/${secret}`;
+}
+
+/**
+ * A library item as one playlist for the UI. `other` is an item that is not a playlist
+ * (a system playlist, say); `unusable` a playlist without a link, or with a link that
+ * is not a playlist URL.
+ */
+function myPlaylistFromApi(item: unknown): MyPlaylistDto | "other" | "unusable" {
+  const parsed = apiLibraryItemSchema.safeParse(item);
+  if (!parsed.success) return "other";
+  const liked = "playlist" in parsed.data && parsed.data.type === "playlist-like";
+  const playlist = "playlist" in parsed.data ? parsed.data.playlist : parsed.data;
+
+  const permalink = httpsUrl(playlist.permalink_url);
+  if (permalink === null) return "unusable";
+  const url = shareUrl(permalink, playlist.secret_token);
+
+  const trackArtwork = playlist.tracks?.map((track) => httpsUrl(track.artwork_url)).find(Boolean);
+  const candidate: MyPlaylistDto = {
+    soundcloudId: String(playlist.id),
+    title: playlist.title.trim() || "Untitled playlist",
+    url,
+    artworkUrl: largerArtwork(httpsUrl(playlist.artwork_url) ?? trackArtwork ?? null),
+    owner: playlist.user?.username?.trim() || null,
+    trackCount: Math.max(0, Math.round(playlist.track_count ?? playlist.tracks?.length ?? 0)),
+    isPrivate: playlist.sharing === "private",
+    liked,
+  };
+  const checked = myPlaylistSchema.safeParse(candidate);
+  return checked.success ? checked.data : "unusable";
+}
+
+interface Page {
+  path: string;
+  params: Record<string, string>;
+}
+
+/** The path and query of a `next_href`, when it stays on api-v2; the id is re-added. */
+function nextPage(href: string | null | undefined): Page | null {
+  if (href === null || href === undefined || !URL.canParse(href)) return null;
+  const url = new URL(href);
+  if (url.origin !== API_BASE) return null;
+  const params = Object.fromEntries(url.searchParams);
+  delete params.client_id;
+  return { path: url.pathname, params };
+}
+
+/**
+ * The listings behind SoundCloud's own library, in the order the picker shows them.
+ * The signed-in listings (`/me/...`) are the ones that can include the account's private
+ * playlists: the `/users/{id}/...` listings are the public profile view. Every listing
+ * runs; one SoundCloud does not have is reported as missing. `liked` false means every
+ * item is the account's own; true means each item says (`type: "playlist-like"`).
+ */
+const LIBRARY_SOURCES = [
+  { path: () => "/me/library/all", liked: true },
+  { path: () => "/me/playlists", liked: false },
+  { path: (id: string) => `/users/${id}/playlists_without_albums`, liked: false },
+  { path: (id: string) => `/users/${id}/albums`, liked: false },
+  { path: (id: string) => `/users/${id}/playlists/liked_and_owned`, liked: true },
+] as const;
+
+type ListingResult =
+  /** `items` is null when SoundCloud has no such listing. */
+  | { ok: true; items: unknown[] | null }
+  | { ok: false; kind: "rejected" | "unavailable"; reason: string };
+
+/** Every item of one paged listing, following `next_href`. Never rejects. */
+async function listAllPages(
+  deps: ApiV2Deps,
+  first: Page,
+  headers: Record<string, string>,
+  what: string,
+): Promise<ListingResult> {
+  const items: unknown[] = [];
+  let page: Page | null = first;
+  for (let pages = 0; page !== null && pages < MAX_LIBRARY_PAGES; pages += 1) {
+    const response = await apiGet(deps, page.path, page.params, headers);
+    if (!response.ok) {
+      if (response.kind === "http" && (response.status === 401 || response.status === 403)) {
+        return { ok: false, kind: "rejected", reason: `SoundCloud answered ${response.status}` };
+      }
+      // A listing SoundCloud does not have (any more) is reported, not an outage.
+      if (response.kind === "http" && response.status === 404) {
+        return { ok: true, items: items.length === 0 ? null : items };
+      }
+      return { ok: false, kind: "unavailable", reason: describeFailure(what, response) };
+    }
+    const listing = apiPagedResponseSchema.safeParse(response.body);
+    if (!listing.success) {
+      return { ok: false, kind: "unavailable", reason: `${what} returned an unexpected response` };
+    }
+    items.push(...listing.data.collection);
+    page = listing.data.collection.length === 0 ? null : nextPage(listing.data.next_href);
+  }
+  return { ok: true, items };
+}
+
+/**
+ * Lists the playlists of the account a login token belongs to: its own (public and
+ * private) and its albums first, then the ones it liked. A playlist listed twice
+ * appears once, as the account's own. The token travels only in the Authorization
+ * header and never appears in a result or a reason. Never rejects.
+ */
+export async function fetchMyPlaylists(
+  deps: ApiV2Deps,
+  oauthToken: string,
+  soundcloudUserId: string,
+): Promise<MyPlaylistsResult> {
+  const headers = { Authorization: `OAuth ${oauthToken}` };
+  const seen = new Map<string, MyPlaylistDto>();
+  const listings: ListingReport[] = [];
+
+  for (const source of LIBRARY_SOURCES) {
+    const path = source.path(encodeURIComponent(soundcloudUserId));
+    const listed = await listAllPages(
+      deps,
+      { path, params: { limit: String(LIBRARY_PAGE_SIZE) } },
+      headers,
+      `${path} listing`,
+    );
+    if (!listed.ok) return listed;
+    const report: ListingReport = {
+      path,
+      items: listed.items === null ? null : listed.items.length,
+      playlists: 0,
+      unusable: 0,
+      other: 0,
+    };
+    for (const item of listed.items ?? []) {
+      const playlist = myPlaylistFromApi(item);
+      if (playlist === "other" || playlist === "unusable") {
+        report[playlist] += 1;
+        continue;
+      }
+      report.playlists += 1;
+      if (seen.has(playlist.soundcloudId)) continue;
+      // An own listing never holds a liked playlist, whatever the item says.
+      seen.set(playlist.soundcloudId, source.liked ? playlist : { ...playlist, liked: false });
+    }
+    listings.push(report);
+  }
+
+  return { ok: true, playlists: [...seen.values()], listings };
 }

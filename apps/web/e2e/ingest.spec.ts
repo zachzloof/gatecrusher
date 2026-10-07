@@ -1,5 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
-import { ADDED, DETAIL, fakeApi, PLAYLIST_ID, PLAYLIST_URL, PLAYLISTS } from "./fixtures";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  ADDED,
+  CONNECTED,
+  DETAIL,
+  fakeApi,
+  MY_PLAYLISTS,
+  PLAYLIST_ID,
+  PLAYLIST_URL,
+  PLAYLISTS,
+} from "./fixtures";
 
 /** Fakes the ingest: POST /api/playlists answers as if the playlist had been stored. */
 async function fakeIngest(page: Page, status: number, body: unknown): Promise<void> {
@@ -172,5 +181,87 @@ test.describe("error states", () => {
       .filter({ hasText: "This playlist is not in Gatecrusher" });
     await expect(alert).toContainText("No such playlist.");
     await expect(page.getByRole("link", { name: "Playlists" }).first()).toBeVisible();
+  });
+});
+
+test.describe("from my SoundCloud", () => {
+  async function openPicker(page: Page): Promise<Locator> {
+    await page.goto("/playlists");
+    await page.getByRole("button", { name: "Add playlist" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add playlist" });
+    await dialog.getByRole("button", { name: "From my SoundCloud" }).click();
+    return dialog;
+  }
+
+  test("search the account's playlists and add one with a click", async ({ page }) => {
+    await fakeApi(page, { account: CONNECTED, myPlaylists: MY_PLAYLISTS, detail: DETAIL });
+    const posted: unknown[] = [];
+    await page.route("**/api/playlists", (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      posted.push(route.request().postDataJSON());
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(ADDED),
+      });
+    });
+
+    const dialog = await openPicker(page);
+    const tiles = dialog.getByRole("list", { name: "Your playlists" }).getByRole("button");
+    await expect(tiles).toHaveCount(3);
+    await expect(tiles.nth(1)).toContainText("12 tracks");
+    await expect(tiles.nth(2)).toContainText("by other-dj");
+
+    await dialog.getByRole("searchbox", { name: "Search your playlists" }).fill("secret");
+    await expect(tiles).toHaveCount(1);
+    await expect(dialog.getByText("1 of 3")).toBeVisible();
+
+    await tiles.first().click();
+    await expect(page).toHaveURL(new RegExp(`/playlists/${PLAYLIST_ID}\\?skipped=1$`));
+    // The private playlist is added by its share-token URL.
+    expect(posted).toEqual([{ url: MY_PLAYLISTS.playlists[1]?.url }]);
+  });
+
+  test("a search with no matches says so", async ({ page }) => {
+    await fakeApi(page, { account: CONNECTED, myPlaylists: MY_PLAYLISTS });
+
+    const dialog = await openPicker(page);
+    await dialog.getByRole("searchbox", { name: "Search your playlists" }).fill("zzz");
+
+    await expect(dialog.getByText("No playlists match “zzz”.")).toBeVisible();
+  });
+
+  test("points to the Connect page when no account is connected", async ({ page }) => {
+    await fakeApi(page);
+
+    const dialog = await openPicker(page);
+
+    await expect(dialog.getByText("No SoundCloud account is connected yet.")).toBeVisible();
+    await expect(dialog.getByRole("link", { name: "Connect SoundCloud" })).toHaveAttribute(
+      "href",
+      "/connect",
+    );
+  });
+
+  test("shows the failure and a retry when SoundCloud cannot be read", async ({ page }) => {
+    await fakeApi(page, {
+      account: CONNECTED,
+      myPlaylists: {
+        status: 502,
+        body: {
+          error: {
+            code: "upstream_failed",
+            message: "Could not read the playlists from SoundCloud. Try again in a minute.",
+          },
+        },
+      },
+    });
+
+    const dialog = await openPicker(page);
+
+    const alert = dialog.getByRole("alert");
+    await expect(alert).toContainText("Could not load your playlists");
+    await expect(alert).toContainText("Could not read the playlists from SoundCloud");
+    await expect(alert.getByRole("button", { name: "Try again" })).toBeVisible();
   });
 });
