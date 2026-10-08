@@ -51,8 +51,10 @@ async function deletePlaylist(playlistId: string): Promise<DeleteResult> {
 
 /** What deleting removes from disk, in the dialog's own words. */
 function filesSentence({ count, bytes }: PlaylistSummaryDto["downloads"]): string {
-  if (count === 0) return "Nothing has been downloaded for it, so no files are deleted.";
-  return `Its ${count} downloaded ${count === 1 ? "file" : "files"} (${formatBytes(bytes)}) ${count === 1 ? "is" : "are"} deleted from the download folder too.`;
+  if (count === 0) {
+    return "Its download folder is deleted too, with any unfinished downloads in it.";
+  }
+  return `Its download folder is deleted too: ${count} downloaded ${count === 1 ? "file" : "files"} (${formatBytes(bytes)}) and any unfinished downloads.`;
 }
 
 interface DeletePlaylistDialogProps {

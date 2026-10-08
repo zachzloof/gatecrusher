@@ -394,7 +394,11 @@ describe("deletePlaylist", () => {
 
     const result = await deletePlaylist(db, playlistId);
 
-    expect(result).toEqual({ ok: true, filePaths: [download.path] });
+    expect(result).toEqual({
+      ok: true,
+      filePaths: [download.path],
+      folder: { slug: "fixture-crate", shared: false },
+    });
     expect(await db.$count(playlists)).toBe(0);
     expect(await db.$count(tracks)).toBe(0);
     expect(await db.$count(runs)).toBe(0);
@@ -419,7 +423,11 @@ describe("deletePlaylist", () => {
     const { playlistId } = await seedPlaylist();
     await startPlaylistRun(db, playlistId);
 
-    expect(await deletePlaylist(db, playlistId)).toEqual({ ok: true, filePaths: [] });
+    expect(await deletePlaylist(db, playlistId)).toEqual({
+      ok: true,
+      filePaths: [],
+      folder: { slug: "fixture-crate", shared: false },
+    });
     expect(await db.$count(jobs)).toBe(0);
   });
 

@@ -596,15 +596,44 @@ describe("DELETE /api/playlists/:id", () => {
     expect(await exists(folder)).toBe(false);
   });
 
-  it("keeps files in the folder that the app did not record", async () => {
+  it("deletes the whole folder, partial downloads and unrecorded files included", async () => {
     const playlistId = await downloadedPlaylist();
-    const stray = path.join(dataDir, "downloads", "fixture-crate", "mine.wav");
-    await writeFile(stray, "not recorded");
+    const folder = path.join(dataDir, "downloads", "fixture-crate");
+    await writeFile(path.join(folder, ".partial-abc.mp3.part"), "half a song");
+    await writeFile(path.join(folder, "mine.wav"), "not recorded");
 
-    await handleDeletePlaylist(playlistId, depsWith().deps);
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
 
-    expect(await exists(stray)).toBe(true);
-    await rm(stray);
+    expect(deletePlaylistResponseSchema.parse(await response.json())).toEqual({
+      deletedFiles: 3,
+      freedBytes: SONG.length + "half a song".length + "not recorded".length,
+    });
+    expect(await exists(folder)).toBe(false);
+  });
+
+  it("removes only its own files when another playlist shares the folder", async () => {
+    const playlistId = await downloadedPlaylist();
+    const folder = path.join(dataDir, "downloads", "fixture-crate");
+    await savePlaylistIngest(db, {
+      soundcloudUrl: "https://soundcloud.com/someone-else/sets/fixture-crate",
+      source: "api_v2",
+      soundcloudId: "9002",
+      title: "Another Fixture Crate",
+      owner: "someone-else",
+      artworkUrl: null,
+      tracks: [track("x1")],
+    });
+    const theirs = path.join(folder, "Someone Else - Track x1.mp3");
+    await writeFile(theirs, "their song");
+
+    const response = await handleDeletePlaylist(playlistId, depsWith().deps);
+
+    expect(deletePlaylistResponseSchema.parse(await response.json())).toEqual({
+      deletedFiles: 1,
+      freedBytes: SONG.length,
+    });
+    expect(await exists(theirs)).toBe(true);
+    await rm(folder, { recursive: true, force: true });
   });
 
   it("is refused, and changes nothing, while one of its tracks is downloading", async () => {
@@ -630,9 +659,10 @@ describe("DELETE /api/playlists/:id", () => {
 
     const response = await handleDeletePlaylist(playlistId, depsWith().deps);
 
-    expect(deletePlaylistResponseSchema.parse(await response.json()).deletedFiles).toBe(0);
+    expect(response.status).toBe(200);
     expect(await exists(outside)).toBe(true);
-    await rm(path.join(dataDir, "downloads", "fixture-crate"), { recursive: true, force: true });
+    expect(await exists(path.join(dataDir, "downloads", "fixture-crate"))).toBe(false);
+    await rm(outside);
   });
 
   it("deletes a playlist whose files were already removed by hand", async () => {

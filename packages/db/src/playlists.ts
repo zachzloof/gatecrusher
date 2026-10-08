@@ -1,8 +1,9 @@
-import type {
-  DownloadKind,
-  IngestSource,
-  IngestedTrack,
-  TrackClassification,
+import {
+  playlistSlug,
+  type DownloadKind,
+  type IngestSource,
+  type IngestedTrack,
+  type TrackClassification,
 } from "@gatecrusher/core";
 import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import type { Database } from "./client.ts";
@@ -267,6 +268,11 @@ export type DeletePlaylistResult =
       ok: true;
       /** The verified downloads it had, relative to the data dir, for the caller to remove. */
       filePaths: string[];
+      /**
+       * The playlist's download folder (its slug under `downloads/`) and whether another
+       * playlist still saves into the same one, in which case only `filePaths` may go.
+       */
+      folder: { slug: string; shared: boolean };
     }
   | { ok: false; kind: "playlist_not_found" | "busy"; reason: string };
 
@@ -282,7 +288,7 @@ export async function deletePlaylist(
 ): Promise<DeletePlaylistResult> {
   return db.transaction(async (tx) => {
     const [playlist] = await tx
-      .select({ id: playlists.id })
+      .select({ id: playlists.id, soundcloudUrl: playlists.soundcloudUrl, title: playlists.title })
       .from(playlists)
       .where(eq(playlists.id, playlistId))
       .for("update");
@@ -315,6 +321,13 @@ export async function deletePlaylist(
       .from(downloads)
       .where(inArray(downloads.trackId, trackIds));
     await tx.delete(playlists).where(eq(playlists.id, playlistId));
-    return { ok: true, filePaths: files.map((file) => file.filePath) };
+
+    // Two playlists with the same slug (a title reused, say) share one folder on disk.
+    const slug = playlistSlug(playlist.soundcloudUrl, playlist.title);
+    const others = await tx
+      .select({ soundcloudUrl: playlists.soundcloudUrl, title: playlists.title })
+      .from(playlists);
+    const shared = others.some((other) => playlistSlug(other.soundcloudUrl, other.title) === slug);
+    return { ok: true, filePaths: files.map((file) => file.filePath), folder: { slug, shared } };
   });
 }

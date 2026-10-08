@@ -1,10 +1,10 @@
 // The logic behind the run and screenshot routes, with everything they touch passed in,
 // so tests can run them against a throwaway database and a temp data dir.
 import { createReadStream } from "node:fs";
-import { readFile, rm, rmdir, stat } from "node:fs/promises";
+import { readdir, readFile, rm, rmdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
-import { playlistSlug } from "@gatecrusher/core";
+import { playlistSlug, sanitiseFileNamePart } from "@gatecrusher/core";
 import {
   cancelPlaylistRun,
   deletePlaylist,
@@ -99,14 +99,54 @@ function errorCode(error: unknown): unknown {
   return error instanceof Error && "code" in error ? error.code : undefined;
 }
 
+interface Removed {
+  deletedFiles: number;
+  freedBytes: number;
+}
+
+const NOTHING_REMOVED: Removed = { deletedFiles: 0, freedBytes: 0 };
+
+/**
+ * Deletes a playlist's whole download folder: its verified files, the partial files a
+ * cancelled or failed download left behind, and anything else in it. Returns what was
+ * removed. Used when no other playlist saves into the same folder.
+ */
+async function removeDownloadFolder(slug: string, deps: RunHandlerDeps): Promise<Removed> {
+  const root = path.resolve(deps.dataDir, "downloads");
+  const folder = path.join(root, sanitiseFileNamePart(slug));
+  if (path.dirname(folder) !== root) {
+    // The slug is sanitised, so this can only happen if that guarantee is ever broken.
+    deps.log.error({ slug }, "Refusing to delete a download folder outside the downloads folder");
+    return NOTHING_REMOVED;
+  }
+
+  let deletedFiles = 0;
+  let freedBytes = 0;
+  try {
+    for (const entry of await readdir(folder, { recursive: true, withFileTypes: true })) {
+      if (!entry.isFile()) continue;
+      const { size } = await stat(path.join(entry.parentPath, entry.name));
+      deletedFiles += 1;
+      freedBytes += size;
+    }
+  } catch (error) {
+    // Already gone (removed by hand, or nothing was ever downloaded): nothing to free.
+    if (errorCode(error) === "ENOENT") return NOTHING_REMOVED;
+    throw error;
+  }
+  await rm(folder, { recursive: true, force: true });
+  return { deletedFiles, freedBytes };
+}
+
 /**
  * Deletes recorded download files, then the folders they leave empty. Only paths inside
- * the data dir's downloads folder are ever touched. Returns what was removed.
+ * the data dir's downloads folder are ever touched. Returns what was removed. Used when
+ * another playlist shares the folder, so the folder itself has to stay.
  */
 async function removeDownloadFiles(
   filePaths: readonly string[],
   deps: RunHandlerDeps,
-): Promise<{ deletedFiles: number; freedBytes: number }> {
+): Promise<Removed> {
   const root = path.resolve(deps.dataDir, "downloads");
   const folders = new Set<string>();
   let deletedFiles = 0;
@@ -147,8 +187,10 @@ async function removeDownloadFiles(
 }
 
 /**
- * DELETE /api/playlists/:id — the playlist, everything recorded about it, and its
- * downloaded files. Refused while one of its tracks is downloading.
+ * DELETE /api/playlists/:id — the playlist, everything recorded about it, and its whole
+ * download folder, partial downloads included. Refused while one of its tracks is
+ * downloading. When another playlist saves into the same folder, only this playlist's
+ * recorded files are removed.
  */
 export function handleDeletePlaylist(playlistId: string, deps: RunHandlerDeps): Promise<Response> {
   return guarded(deps.log, "DELETE /api/playlists/:id", async () => {
@@ -162,7 +204,9 @@ export function handleDeletePlaylist(playlistId: string, deps: RunHandlerDeps): 
         : errorResponse(404, "not_found", deleted.reason);
     }
 
-    const removed = await removeDownloadFiles(deleted.filePaths, deps);
+    const removed = deleted.folder.shared
+      ? await removeDownloadFiles(deleted.filePaths, deps)
+      : await removeDownloadFolder(deleted.folder.slug, deps);
     return Response.json(deletePlaylistResponseSchema.parse(removed), { headers: NO_STORE });
   });
 }
