@@ -106,7 +106,7 @@ test.beforeEach(async ({ page }) => {
   await fakeApi(page);
 });
 
-test("run tracks: queued, running with its step, then downloaded", async ({ page }) => {
+test("run tracks: queued, running, then downloaded", async ({ page }) => {
   const playlist = await fakePlaylist(page, DETAIL);
   const run = await fakeRun(page, 202, { ...NOTHING, runId: RUN_ID, queued: 1 });
   await page.goto(`/playlists/${PLAYLIST_ID}`);
@@ -128,9 +128,10 @@ test("run tracks: queued, running with its step, then downloaded", async ({ page
   await expect(runBar(page)).toContainText("1 in progress");
 
   // The page keeps asking while work is in progress, so it follows the worker.
-  playlist.becomes(detailWith({ job: job({ status: "RUNNING", stepName: "open-more" }) }));
+  // A running track reads as plain "Running": the worker's step name is internal.
+  playlist.becomes(detailWith({ job: job({ status: "RUNNING", stepName: "yt-dlp-download" }) }));
   await expect(native).toContainText("Running");
-  await expect(native).toContainText("open-more");
+  await expect(native).not.toContainText("yt-dlp-download");
 
   playlist.becomes(DOWNLOADED);
   await expect(native).toContainText("Downloaded");
