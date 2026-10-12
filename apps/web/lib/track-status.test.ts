@@ -67,10 +67,10 @@ describe("trackStatus", () => {
 });
 
 describe("statusDetail and statusExplanation", () => {
-  it("names the step of a running job", () => {
-    const running = track({ job: job({ status: "RUNNING", stepName: "open-more" }) });
+  it("shows a running job as plain running, without its internal step name", () => {
+    const running = track({ job: job({ status: "RUNNING", stepName: "yt-dlp-download" }) });
 
-    expect(statusDetail(running)).toBe("open-more");
+    expect(statusDetail(running)).toBeNull();
     expect(statusExplanation(running)).toBeUndefined();
   });
 

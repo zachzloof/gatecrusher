@@ -18,10 +18,14 @@ export function trackStatus(track: TrackDto): JobStatus | null {
   return track.job?.status ?? null;
 }
 
-/** The short qualifier after the status label: the current step, or why it is manual. */
+/**
+ * The short qualifier after the status label: the step a paused job is waiting on, or
+ * why a track is manual. A running job shows no step: its name is an internal label
+ * ("yt-dlp-download") that means nothing to the user.
+ */
 export function statusDetail(track: TrackDto): string | null {
   const status = trackStatus(track);
-  if (status === "RUNNING" || status === "WAITING_FOR_HUMAN") return track.job?.stepName ?? null;
+  if (status === "WAITING_FOR_HUMAN") return track.job?.stepName ?? null;
   if (status === "MANUAL") {
     const reason = track.job?.manual?.reason;
     return reason === undefined ? null : MANUAL_REASON_LABELS[reason];
